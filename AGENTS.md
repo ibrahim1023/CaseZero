@@ -41,8 +41,12 @@ foundation design lives in `docs/superpowers/specs/`.
 
 1. Work test-first: failing test, minimal change, passing focused test, then
    broader verification.
-2. Commit in small, independently reviewable bits. Each commit is coherent and
-   passes the checks relevant to its scope.
+2. Commit in bits — one task, one commit. Each plan task (or a single
+   coherent step within it) is committed separately, immediately after its
+   tests pass and its verification loop is green. Never batch multiple tasks
+   or features into one commit, never carry uncommitted work across tasks,
+   and never commit code whose focused tests have not been run. If a diff
+   grows to cover two tasks, split it before committing.
 3. Preserve public contracts (evidence model, tool layer, benchmark CLI,
    scenario/manifest formats) or update their tests, ADRs, and docs in the
    same change.
