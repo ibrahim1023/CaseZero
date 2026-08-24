@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local data — source artifacts are NOT committed (fixtures/real-cases holds
+# manifests + checksums only; originals are re-fetched by the retrieval script)
+data/
+supabase/.branches/
+supabase/.temp/
+
+# Benchmark output
+benchmark/results/*
+!benchmark/results/.gitkeep
+benchmark/reports/*
+!benchmark/reports/.gitkeep
+
+# OS
+.DS_Store
+
+# Local-only inputs (never staged or committed — see AGENTS.md)
+product-spec.md
+task.md

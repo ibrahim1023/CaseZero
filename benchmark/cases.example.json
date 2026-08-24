@@ -1,0 +1,12 @@
+[
+  {
+    "id": "case-a",
+    "ntsb_number": "CEN22FA375",
+    "title": "Example entry — replace with the real curated first-milestone cases",
+    "manifest": "fixtures/real-cases/case-a/manifest.json",
+    "cutoff": "2022-08-01T00:00:00Z",
+    "official_finding_ref": "fixtures/real-cases/case-a/official-finding.json",
+    "modality_profile": "narrative-only",
+    "notes": "Selection requirements per spec §9: final finding exists, docket public, meaningful pre-conclusion evidence, non-trivial cause."
+  }
+]
