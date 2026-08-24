@@ -6,6 +6,7 @@ dependencies = [
   "casezero-evidence",
   "httpx>=0.28.1",
   "pydantic>=2.11.7",
+  "pyyaml>=6.0.2",
 ]
 
 [build-system]

@@ -23,6 +23,7 @@ dev = [
   "pytest-asyncio>=1.1.0",
   "respx>=0.22.0",
   "ruff>=0.12.8",
+  "types-pyyaml>=6.0.12.20250822",
 ]
 
 [tool.ruff]
