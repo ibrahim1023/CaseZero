@@ -34,6 +34,31 @@ foundation design lives in `docs/superpowers/specs/`.
   run in ordinary CI.
 - Source artifacts are immutable after ingestion (SHA-256). Never commit source
   artifacts; commit manifests + URLs + checksums + retrieval scripts.
+- Use only material the NTSB has officially made public. Never seek, acquire,
+  infer, or use confidential, leaked, restricted, sealed, unpublished, or
+  otherwise protected evidence.
+- Do not use the NTSB seal, logo, or protected branding without written
+  permission, and never imply government endorsement, affiliation, approval,
+  sponsorship, certification, or operation.
+- Keep official material and AI-generated content in separate data fields and
+  UI components. Official facts carry source links and plain-text attribution;
+  generated content carries a persistent “AI-Generated — Not an Official
+  Finding” or “CaseZero Experimental Hypothesis” label and must not resemble an
+  official report or government notice.
+- When third-party docket-material rights are unclear, link to the official
+  docket instead of republishing. Never use such material for model training
+  without confirmed rights.
+- Do not assert that a living person or company caused an accident, acted
+  unlawfully, was negligent, or bears liability. Preserve uncertainty and
+  context; generated conclusions are provisional and require expert review.
+- Public-facing functionality must include a process to report, correct, or
+  remove inaccurate or harmful generated content. Run the public-communication
+  checklist in README.md before publishing any demo, screenshot, example,
+  metadata, social-preview card, marketing copy, or post.
+- Obtain qualified legal review before any higher-risk use listed in README.md,
+  including commercialization, private evidence, identifiable-person claims,
+  substantial third-party reproduction, unclear-rights training, or expansion
+  beyond clearly labeled research and education.
 - Use aware UTC datetimes, strict Pydantic boundary models, and structured
   outputs validated against schemas. Never drive state by parsing model prose.
 

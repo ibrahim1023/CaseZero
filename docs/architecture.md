@@ -94,6 +94,28 @@ layer has no web-search or Context.dev tool to call — absence of capability,
 not instruction. After `LOCK`, the evaluation layer gains read access to
 official material. See `docs/decision-log/0007-temporal-blindness-enforcement.md`.
 
+## Legal and public-output boundary
+
+Official source records and CaseZero-generated records remain separate at
+storage, API, and component levels; a response must never overload one field
+with both. Public DTOs expose distinct `official` and `casezero_generated`
+sections. Every generated section carries a persistent “AI-Generated — Not an
+Official Finding” or “CaseZero Experimental Hypothesis” label, while official
+material carries a direct source link and “Official NTSB Finding” label. UI
+components and export templates must not imitate government reports, notices,
+seals, or determinations.
+
+Acquisition accepts only officially public NTSB URLs and never confidential,
+leaked, restricted, sealed, unpublished, or user-submitted evidence. Materials
+with unclear third-party reuse rights remain links/checksums rather than
+republished payloads and are excluded from model-training corpora. Generated
+copy preserves uncertainty and may not assert blame, unlawful conduct,
+negligence, fault, or liability for living people or companies. Any public
+interface must include a channel to report, correct, or remove inaccurate or
+harmful generated content. Publication requires Loop 5 in
+`docs/development/verification-loops.md`; README.md lists cases that require
+qualified legal review.
+
 ## Workflow state and resumability
 
 The investigation is an explicit stage machine (Pydantic AI agents inside

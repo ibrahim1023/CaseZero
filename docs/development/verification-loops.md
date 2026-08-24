@@ -42,6 +42,17 @@ uv run pytest tests/resume/ -v              # if workflow state changed
 CASEZERO_LIVE=1 uv run pytest -m live -v    # real NTSB fetch / real model smoke
 ```
 
+## Loop 5 — Before anything becomes public
+
+Review the README public-communication checklist against the exact artifact,
+including screenshots, demo data, page metadata, social-preview cards, and
+marketing copy. Confirm source links and attribution; absence of unapproved
+NTSB branding or implied affiliation; visual and data-level separation of
+official findings from persistently labeled AI output; cautious handling of
+third-party material; no unsupported blame, negligence, fault, misconduct, or
+liability claims; visible uncertainty; and a correction/removal process. Stop
+for qualified legal review when any README higher-risk trigger applies.
+
 ## Evidence rules
 
 - Paste or summarize actual command output when reporting status; never claim

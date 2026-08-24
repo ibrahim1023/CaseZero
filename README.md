@@ -5,10 +5,7 @@ docket of a real NTSB aviation accident, reconstructs the investigation while
 **blind to the official probable-cause finding**, locks its own assessment, then
 evaluates itself against the finding the NTSB eventually published.
 
-> CaseZero is an experimental AI evidence-analysis system using publicly
-> released investigation material. It does not replace the NTSB, does not
-> provide authoritative accident findings, and establishes neither safety
-> certification nor legal liability.
+> **Disclaimer:** CaseZero is an independent, experimental AI project. It is not affiliated with, endorsed by, sponsored by, or approved by the National Transportation Safety Board (NTSB) or any other government agency. Official NTSB material is identified and linked to its source. CaseZero-generated summaries, hypotheses, classifications, and other AI outputs are experimental, may be incomplete or incorrect, and are not official findings, legal conclusions, or determinations of cause, fault, negligence, or liability. Consult the original NTSB materials and qualified experts before relying on any output.
 
 ## What it is
 
@@ -41,6 +38,10 @@ investigation; retrieval is not the investigation.
    (`INSUFFICIENT_EVIDENCE`).
 6. **Blind results are immutable.** Locking records assessment hash, model and
    prompt versions, and evidence-set hash before any reveal.
+7. **Independent and experimental.** Official NTSB material and CaseZero AI
+   output stay in separate fields and interface components. Generated analysis
+   is persistently labeled and never presented as an official finding,
+   government determination, or assignment of blame or liability.
 
 ## Repository layout
 
@@ -99,10 +100,77 @@ Rules for contributors (human or agentic) live in `AGENTS.md`. The verification
 loop to run before claiming anything is done lives in
 `docs/development/verification-loops.md`.
 
-## Data sources & legal
+## Legal and public-communication guardrails
 
-NTSB-authored reports and docket contents are public domain as US Government
-works; attribute "Courtesy: National Transportation Safety Board". Third-party
-material inside dockets may carry its own copyright — such artifacts are never
-redistributed from this repo; `fixtures/real-cases/` stores manifests, source
-URLs, and checksums, and a retrieval script re-fetches originals.
+These are project guardrails, not legal advice. Obtain qualified legal review
+for higher-risk uses.
+
+### Sources, rights, and attribution
+
+- Use only material the NTSB has officially made public. Preserve direct source
+  links and plain-text attribution such as “Source: National Transportation
+  Safety Board” wherever practical.
+- Never seek, acquire, infer, or use confidential, leaked, restricted, sealed,
+  unpublished, or otherwise protected investigation material.
+- Do not use the NTSB seal, logo, or protected branding without written
+  permission. CaseZero’s name, interface, metadata, marketing, screenshots,
+  social-preview cards, and posts must not imply government affiliation,
+  endorsement, approval, sponsorship, certification, or operation.
+- NTSB dockets can include material created by manufacturers, operators,
+  witnesses, photographers, consultants, and other third parties. Public
+  availability does not establish unrestricted reuse rights. When ownership or
+  reuse rights are unclear, link to the official docket instead of
+  republishing; do not use the material for model training without confirming
+  the necessary rights. This repository stores manifests, source URLs, and
+  checksums rather than redistributing docket artifacts.
+
+### Official findings and AI output
+
+- Official material and generated content use separate data fields and
+  interface components. Official facts display attribution and direct links
+  where practical.
+- Generated analysis is persistently and visibly labeled, for example:
+  **CaseZero Experimental Hypothesis** or **AI-Generated — Not an Official
+  Finding**. Official conclusions use **Official NTSB Finding**. AI output must
+  not be styled like an official report, government notice, seal, or
+  determination.
+- Preserve uncertainty, conflicting evidence, and important limitations.
+  Describe model conclusions as provisional analysis requiring expert
+  verification.
+- Do not assert as fact that a living person or company caused an accident,
+  acted unlawfully, was negligent, or bears legal liability. Attribute
+  authoritative public conclusions accurately and in context; avoid unsupported
+  accusations, sensational language, or definitive blame claims.
+- Public deployments must provide a process for reporting, correcting, or
+  removing inaccurate or harmful generated content.
+
+### Publication checklist
+
+Before publishing a demo, generated analysis, screenshot, example dataset,
+metadata, marketing page, social-preview card, or post, confirm that:
+
+- only officially public material is used;
+- official sources are identified and linked;
+- no NTSB seal, logo, or protected branding appears without permission;
+- nothing implies NTSB or government endorsement or affiliation;
+- official findings and AI hypotheses are visibly separated and labeled;
+- third-party material is linked rather than republished when rights are
+  unclear;
+- no unsupported statement assigns cause, misconduct, negligence, fault, or
+  liability; and
+- uncertainty and the experimental nature of the output are immediately
+  visible.
+
+### Obtain qualified legal review before
+
+- commercializing CaseZero, charging for access, licensing outputs, or using
+  content in advertising;
+- accepting private, confidential, leaked, unpublished, or user-submitted
+  evidence;
+- making detailed claims about identifiable people or companies;
+- reproducing substantial third-party documents, photographs, diagrams,
+  recordings, or datasets;
+- training models on material whose copyright, privacy status, or permitted
+  use is unclear; or
+- expanding beyond research, education, and clearly labeled experimental
+  analysis.
