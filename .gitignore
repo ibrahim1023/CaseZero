@@ -31,9 +31,5 @@ benchmark/reports/*
 # OS
 .DS_Store
 
-# Local-only inputs (never staged or committed — see AGENTS.md)
-product-spec.md
-task.md
-
 # Machine-local agent config
 .devin/config.local.json
