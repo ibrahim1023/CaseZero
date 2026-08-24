@@ -77,6 +77,12 @@ foundation design lives in `docs/superpowers/specs/`.
    same change.
 4. Run the verification loop in `docs/development/verification-loops.md`
    before claiming completion.
+5. After every phase passes its full verification gate, invoke the repository
+   `explain-diff-html` skill on the complete phase comparison (phase-start
+   commit through phase-end commit). Generate and inspect the required
+   self-contained `/tmp/...html` artifact before marking the phase complete;
+   report its exact path and any verification limitations. The explanation is
+   mandatory even when the user does not ask for it explicitly.
 
 Do not use Superpowers execution skills (subagent-driven-development,
 executing-plans) to implement. Follow the tracked implementation plan in

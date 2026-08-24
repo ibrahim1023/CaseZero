@@ -53,6 +53,16 @@ third-party material; no unsupported blame, negligence, fault, misconduct, or
 liability claims; visible uncertainty; and a correction/removal process. Stop
 for qualified legal review when any README higher-risk trigger applies.
 
+## Loop 6 — After every phase
+
+After the full phase gate is green and all phase tasks have clean individual
+commits, invoke the repository `explain-diff-html` skill. Compare the commit
+immediately before the phase with the final phase commit, while separately
+identifying any unrelated working-tree changes. Generate the self-contained
+HTML under `/tmp`, inspect and correct it, then report the exact path and any
+verification limitations. Do not mark the phase complete until this artifact
+exists. The HTML is ephemeral and must not be committed to the repository.
+
 ## Evidence rules
 
 - Paste or summarize actual command output when reporting status; never claim
