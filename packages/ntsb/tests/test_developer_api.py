@@ -3,11 +3,8 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 import respx
-from casezero_ntsb.developer_api import (
-    CaseNotFound,
-    NtsbApiClient,
-    NtsbApiConfigurationError,
-)
+from casezero_ntsb.developer_api import NtsbApiClient, NtsbApiConfigurationError
+from casezero_ntsb.models import CaseNotFound
 
 ENDPOINT_TEMPLATE = "https://api.example.test/GetCase?identifier={identifier}"
 

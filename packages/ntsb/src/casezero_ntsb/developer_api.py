@@ -5,14 +5,10 @@ from urllib.parse import quote
 
 import httpx
 
-from casezero_ntsb.models import CaseMetadata, parse_case_metadata
+from casezero_ntsb.models import CaseMetadata, CaseNotFound, parse_case_metadata
 
 
 class NtsbApiConfigurationError(ValueError):
-    pass
-
-
-class CaseNotFound(LookupError):
     pass
 
 

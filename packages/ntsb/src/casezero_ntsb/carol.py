@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from casezero_ntsb.models import CaseMetadata, parse_case_metadata
+from casezero_ntsb.models import CaseMetadata, CaseNotFound, parse_case_metadata
 
 FILE_EXPORT_URL = "https://data.ntsb.gov/carol-main-public/api/Query/FileExport"
 
@@ -48,6 +48,13 @@ class CarolClient:
 
         response = await self._post_with_retries(self._build_payload(date_from, date_to, mode))
         return self._parse_export(response.content)
+
+    async def get_case(self, ntsb_number: str) -> CaseMetadata:
+        response = await self._post_with_retries(self._build_case_payload(ntsb_number))
+        cases = self._parse_export(response.content)
+        if not cases:
+            raise CaseNotFound(f"NTSB case {ntsb_number} was not found")
+        return cases[0]
 
     async def _post_with_retries(self, payload: dict[str, Any]) -> httpx.Response:
         for attempt in range(self._max_attempts):
@@ -141,6 +148,44 @@ class CarolClient:
             "ExportFormat": "data",
             "SessionId": 227230,
             "ResultSetSize": 500,
+            "SortDescending": True,
+        }
+
+    @staticmethod
+    def _build_case_payload(ntsb_number: str) -> dict[str, Any]:
+        return {
+            "QueryGroups": [
+                {
+                    "QueryRules": [
+                        {
+                            "RuleType": "Simple",
+                            "Values": [ntsb_number],
+                            "Columns": ["Event.NTSBNumber"],
+                            "Operator": "is",
+                            "overrideColumn": "",
+                            "selectedOption": {
+                                "FieldName": "NTSBNumber",
+                                "DisplayText": "",
+                                "Columns": ["Event.NTSBNumber"],
+                                "Selectable": True,
+                                "InputType": "Text",
+                                "RuleType": 0,
+                                "Options": None,
+                                "TargetCollection": "cases",
+                                "UnderDevelopment": False,
+                            },
+                        }
+                    ],
+                    "AndOr": "and",
+                    "inLastSearch": False,
+                    "editedSinceLastSearch": False,
+                }
+            ],
+            "AndOr": "and",
+            "TargetCollection": "cases",
+            "ExportFormat": "data",
+            "SessionId": 227230,
+            "ResultSetSize": 1,
             "SortDescending": True,
         }
 

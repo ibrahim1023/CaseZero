@@ -31,6 +31,7 @@ class RetrievalError:
 class DownloadResult:
     documents: tuple[SourceDocument, ...]
     storage_paths: tuple[str, ...]
+    bytes_stored: int
     errors: tuple[RetrievalError, ...]
 
 
@@ -70,10 +71,11 @@ class NtsbSourceDownloader:
         documents: list[SourceDocument] = []
         storage_paths: list[str] = []
         errors: list[RetrievalError] = []
+        bytes_stored = 0
 
         for docket_document in manifest.documents:
             try:
-                document, storage_path = await self._download_document(
+                document, storage_path, size_bytes = await self._download_document(
                     case_id, docket_document, cutoff
                 )
             except (httpx.HTTPError, OSError, StoreIntegrityError, ValueError) as error:
@@ -89,10 +91,12 @@ class NtsbSourceDownloader:
             await self._repository.add(document, storage_path)
             documents.append(document)
             storage_paths.append(storage_path)
+            bytes_stored += size_bytes
 
         return DownloadResult(
             documents=tuple(documents),
             storage_paths=tuple(storage_paths),
+            bytes_stored=bytes_stored,
             errors=tuple(errors),
         )
 
@@ -101,7 +105,7 @@ class NtsbSourceDownloader:
         case_id: UUID,
         docket_document: DocketDocument,
         cutoff: datetime,
-    ) -> tuple[SourceDocument, str]:
+    ) -> tuple[SourceDocument, str, int]:
         source_url = str(docket_document.source_url)
         self._validate_ntsb_url(source_url)
         response = await self._get_with_retries(source_url)
@@ -125,7 +129,7 @@ class NtsbSourceDownloader:
             ),
             checksum=stored.checksum,
         )
-        return document, stored.storage_path.as_posix()
+        return document, stored.storage_path.as_posix(), stored.size_bytes
 
     async def _get_with_retries(self, source_url: str) -> httpx.Response:
         for attempt in range(self._max_attempts):

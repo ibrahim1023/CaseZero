@@ -3,6 +3,10 @@ from datetime import UTC, date, datetime
 from typing import Protocol
 
 
+class CaseNotFound(LookupError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class AircraftMetadata:
     make: str | None = None

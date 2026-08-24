@@ -7,6 +7,7 @@ import httpx
 import pytest
 import respx
 from casezero_ntsb.carol import FILE_EXPORT_URL, CarolClient
+from casezero_ntsb.models import CaseNotFound
 
 
 def carol_export(rows: list[dict[str, object]]) -> bytes:
@@ -66,6 +67,50 @@ async def test_search_cases_posts_real_carol_shape_and_parses_export() -> None:
         ("Event.Mode", "is", "Aviation"),
     ]
     assert payload["ExportFormat"] == "data"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_case_queries_by_exact_ntsb_number() -> None:
+    route = respx.post(FILE_EXPORT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            content=carol_export(
+                [
+                    {
+                        "cm_ntsbNum": "CEN25LA167",
+                        "cm_eventDate": "2025-04-30T17:52:00Z",
+                        "cm_city": "Bethany",
+                        "cm_state": "OK",
+                        "cm_completionStatus": "Completed",
+                        "cm_vehicles": [],
+                    }
+                ]
+            ),
+        )
+    )
+    async with httpx.AsyncClient() as http_client:
+        case = await CarolClient(http_client=http_client).get_case("CEN25LA167")
+
+    payload = json.loads(route.calls[0].request.content)
+    rule = payload["QueryGroups"][0]["QueryRules"][0]
+    assert (rule["Columns"], rule["Operator"], rule["Values"]) == (
+        ["Event.NTSBNumber"],
+        "is",
+        ["CEN25LA167"],
+    )
+    assert case.ntsb_number == "CEN25LA167"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_case_raises_not_found_for_empty_export() -> None:
+    respx.post(FILE_EXPORT_URL).mock(
+        return_value=httpx.Response(200, content=carol_export([]))
+    )
+    async with httpx.AsyncClient() as http_client:
+        with pytest.raises(CaseNotFound, match="MISSING"):
+            await CarolClient(http_client=http_client).get_case("MISSING")
 
 
 @respx.mock

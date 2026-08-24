@@ -6,6 +6,7 @@ dependencies = [
   "casezero-evidence",
   "casezero-ntsb",
   "fastapi>=0.116.1",
+  "psycopg[binary]>=3.2.9",
   "typer>=0.16.0",
 ]
 

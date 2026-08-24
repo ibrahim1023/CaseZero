@@ -59,6 +59,7 @@ async def test_download_manifest_stores_successes_and_records_failures(tmp_path:
         ).download_manifest(CASE_ID, manifest, cutoff=CUTOFF)
 
     assert len(result.documents) == 1
+    assert result.bytes_stored == len(b"factual bytes")
     assert result.documents[0].checksum
     assert result.documents[0].retrieved_at == RETRIEVED_AT
     assert len(result.errors) == 1
