@@ -5,7 +5,8 @@ from casezero_evidence import (
     DerivedArtifactKind,
     DocumentType,
     ProcessingSource,
-    StructuralUnit,
+    SourceLocator,
+    StructuralUnitKind,
 )
 from pydantic import JsonValue
 
@@ -13,11 +14,20 @@ from casezero_ingestion.media import DetectedMediaType
 
 
 @dataclass(frozen=True, slots=True)
+class StructuralUnitDraft:
+    kind: StructuralUnitKind
+    ordinal: int
+    content_checksum: str
+    locator: SourceLocator
+    payload: dict[str, JsonValue]
+
+
+@dataclass(frozen=True, slots=True)
 class StructuralOutput:
     artifact_kind: DerivedArtifactKind
     artifact_bytes: bytes
     media_type: str
-    units: tuple[StructuralUnit, ...]
+    units: tuple[StructuralUnitDraft, ...]
     tool_metadata: dict[str, JsonValue] = field(default_factory=dict)
 
 
