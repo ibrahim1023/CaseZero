@@ -6,6 +6,7 @@ dependencies = [
     "casezero-evidence",
     "docling==2.120.2",
     "fastexcel==0.20.2",
+    "pillow==12.3.0",
     "polars==1.43.2",
 ]
 

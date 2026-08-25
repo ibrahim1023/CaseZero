@@ -255,6 +255,7 @@ dependencies = [
     { name = "casezero-evidence" },
     { name = "docling" },
     { name = "fastexcel" },
+    { name = "pillow" },
     { name = "polars" },
 ]
 
@@ -263,6 +264,7 @@ requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
     { name = "docling", specifier = "==2.120.2" },
     { name = "fastexcel", specifier = "==0.20.2" },
+    { name = "pillow", specifier = "==12.3.0" },
     { name = "polars", specifier = "==1.43.2" },
 ]
 
