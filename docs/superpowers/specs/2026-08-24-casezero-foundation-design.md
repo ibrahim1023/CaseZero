@@ -128,15 +128,17 @@ tests with provenance assertions; RLS attack tests; crash-resume tests;
 checksum round-trip tests against synthetic binaries; live NTSB smoke tests
 behind `CASEZERO_LIVE=1`.
 
-## Open decisions (owner input requested)
+## Decisions and remaining input
 
-D1. Local-dev platform: Supabase CLI local stack (recommended, parity with
-    hosted RLS/Storage) vs plain postgres:16+pgvector container.
-D2. Embedding model for retrieval phase: Hyperfusion-hosted open embedding
-    vs OpenAI text-embedding-3-small (≤1536-dim pgvector-compatible). Decide
-    at retrieval phase after a recall probe on real evidence.
-D3. Per-stage model table on Hyperfusion (which open-weight model for
-    extraction / hypothesis / critic / vision) — resolved by the Phase 0
-    capability spike measuring schema-failure rates.
-D4. Whether Context.dev is available for the first five cases or manifests
-    are hand-curated first (depends on Context.dev access/pricing).
+- **D1 — resolved:** Supabase CLI local stack for development parity with
+  hosted RLS and Storage.
+- **D2 — open:** Hyperfusion-hosted open embedding vs OpenAI
+  `text-embedding-3-small` (≤1536 dimensions). Decide in the retrieval phase
+  after a recall probe on real evidence.
+- **D3 — partially resolved:** `qwen/qwen3-32b` is the initial text-stage model
+  based on the Phase 0 capability spike. Vision remains a Phase 1 probe.
+- **D4 — resolved:** manually curate the initial benchmark manifests first so
+  they provide a reviewed reference. After curation, validate live Context.dev
+  against at least one reference docket before the Phase 7 go/no-go. Context
+  output performs discovery only; CaseZero still downloads originals and
+  owns checksums, provenance, visibility, and blind-mode exclusion.

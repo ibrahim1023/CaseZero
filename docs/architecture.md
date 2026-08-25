@@ -138,8 +138,10 @@ re-run. Model replays use recorded model-run spans, never fresh calls.
 - **Schema failure from open-weight models** — bounded retries with the failed
   validation error fed back; failures recorded in spans and surfaced per model
   in the benchmark report. See `0003-hyperfusion-model-provider.md`.
-- **Docket scraping fragility** — Context.dev manifests validated, originals
-  downloaded by us; first 5–20 cases allow curated manifests.
+- **Docket scraping fragility** — initial benchmark manifests are manually
+  curated and rights-reviewed first. Live Context.dev is then compared against
+  that reference on at least one docket before the Phase 7 go/no-go; its output
+  remains discovery data, while CaseZero downloads and hashes the originals.
 - **MDB deprecation (April 2027)** — bulk catalog migrates to the developer
   API `GetCasesByDateRangeV2`; acquisition layer isolates this behind
   `packages/ntsb` interfaces.
