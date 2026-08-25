@@ -15,7 +15,7 @@ uv run mypy <changed package>
 
 ```bash
 uv run ruff check .
-uv run mypy packages/ apps/api/
+uv run mypy
 uv run pytest                               # full offline gate: no network, no models
 supabase test db                            # RLS/visibility policy tests, if migrations changed
 ```

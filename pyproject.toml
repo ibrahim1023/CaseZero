@@ -35,4 +35,5 @@ line-length = 100
 [tool.mypy]
 python_version = "3.12"
 strict = true
+explicit_package_bases = true
 packages = ["casezero_evidence", "casezero_ntsb", "casezero_api"]

@@ -854,7 +854,7 @@ git commit -m "chore(spike): select the Phase 1 vision model route"
 
 ```bash
 uv run ruff check .
-uv run mypy packages/ apps/api/
+uv run mypy
 uv run pytest
 supabase start
 supabase test db
