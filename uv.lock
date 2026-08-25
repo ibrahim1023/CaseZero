@@ -256,6 +256,7 @@ version = "0.1.0"
 source = { editable = "packages/ingestion" }
 dependencies = [
     { name = "casezero-evidence" },
+    { name = "casezero-observability" },
     { name = "docling" },
     { name = "fastexcel" },
     { name = "pillow" },
@@ -265,6 +266,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "casezero-observability", editable = "packages/observability" },
     { name = "docling", specifier = "==2.120.2" },
     { name = "fastexcel", specifier = "==0.20.2" },
     { name = "pillow", specifier = "==12.3.0" },

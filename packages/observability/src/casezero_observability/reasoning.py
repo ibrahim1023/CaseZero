@@ -1,6 +1,7 @@
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
+from uuid import UUID, uuid4
 
 from casezero_evidence import ProcessingDisposition
 from pydantic import BaseModel
@@ -33,6 +34,7 @@ class ReasoningResult[OutputT: BaseModel]:
     output: OutputT
     model_name: str
     fallback_used: bool
+    run_id: UUID = field(default_factory=uuid4)
 
 
 class StructuredModel(Protocol):
