@@ -45,7 +45,8 @@ grant insert on observed_visibility to casezero_blind;
 set local role casezero_blind;
 insert into observed_visibility
 select count(*)::integer, min(visibility)
-from public.source_documents;
+from public.source_documents
+where case_id = (select id from public.cases where ntsb_number = 'TEST00AA000');
 reset role;
 
 select extensions.is(
