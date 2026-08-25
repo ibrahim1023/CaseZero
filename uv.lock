@@ -23,6 +23,7 @@ members = [
     "casezero-evidence",
     "casezero-ingestion",
     "casezero-ntsb",
+    "casezero-observability",
 ]
 
 [[package]]
@@ -175,6 +176,7 @@ dependencies = [
     { name = "casezero-evidence" },
     { name = "casezero-ingestion" },
     { name = "casezero-ntsb" },
+    { name = "casezero-observability" },
 ]
 
 [package.dev-dependencies]
@@ -195,6 +197,7 @@ requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
     { name = "casezero-ingestion", editable = "packages/ingestion" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
+    { name = "casezero-observability", editable = "packages/observability" },
 ]
 
 [package.metadata.requires-dev]
@@ -285,6 +288,21 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+]
+
+[[package]]
+name = "casezero-observability"
+version = "0.1.0"
+source = { editable = "packages/observability" }
+dependencies = [
+    { name = "casezero-evidence" },
+    { name = "pydantic-ai-slim", extra = ["openai"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "pydantic-ai-slim", extras = ["openai"], specifier = "==2.30.0" },
 ]
 
 [[package]]
