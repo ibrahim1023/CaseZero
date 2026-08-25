@@ -5,6 +5,8 @@ requires-python = ">=3.12"
 dependencies = [
     "casezero-evidence",
     "docling==2.120.2",
+    "fastexcel==0.20.2",
+    "polars==1.43.2",
 ]
 
 [build-system]
