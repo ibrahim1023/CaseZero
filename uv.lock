@@ -11,6 +11,7 @@ members = [
     "casezero",
     "casezero-api",
     "casezero-evidence",
+    "casezero-ingestion",
     "casezero-ntsb",
 ]
 
@@ -116,6 +117,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "casezero-api" },
     { name = "casezero-evidence" },
+    { name = "casezero-ingestion" },
     { name = "casezero-ntsb" },
 ]
 
@@ -135,6 +137,7 @@ dev = [
 requires-dist = [
     { name = "casezero-api", editable = "apps/api" },
     { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "casezero-ingestion", editable = "packages/ingestion" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
 ]
 
@@ -156,6 +159,7 @@ version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "casezero-evidence" },
+    { name = "casezero-ingestion" },
     { name = "casezero-ntsb" },
     { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
@@ -165,6 +169,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "casezero-ingestion", editable = "packages/ingestion" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
     { name = "fastapi", specifier = ">=0.116.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.9" },
@@ -185,6 +190,17 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.9" },
     { name = "pydantic", specifier = ">=2.11.7" },
 ]
+
+[[package]]
+name = "casezero-ingestion"
+version = "0.1.0"
+source = { editable = "packages/ingestion" }
+dependencies = [
+    { name = "casezero-evidence" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "casezero-evidence", editable = "packages/evidence" }]
 
 [[package]]
 name = "casezero-ntsb"
