@@ -11,9 +11,10 @@ context, and multimodal analysis, behind a provider-agnostic interface.
 
 All model access goes through a narrow `ReasoningModel` interface (Pydantic AI
 models underneath). The MVP provider is Hyperfusion's OpenAI-compatible API
-serving open-weight models — reasoning stages target a strong open-weight
-reasoning model (e.g. gpt-oss-120b class), image interpretation targets a
-hosted VLM (e.g. Gemma 3 / Qwen-VL class). Model selection is per-stage
+serving open-weight models. The Phase 0 capability spike selected
+`qwen/qwen3-32b` for the initial text-stage model table; see
+`0003a-hyperfusion-spike-results.md`. Image interpretation requires a separate
+Phase 1 VLM probe and remains unresolved. Model selection is per-stage
 configuration, not hardcoded. Vision/OCR and Whisper-class speech on the same
 API are a bonus, not a reason to integrate more surface.
 

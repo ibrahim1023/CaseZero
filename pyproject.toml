@@ -19,6 +19,8 @@ casezero-ntsb = { workspace = true }
 [dependency-groups]
 dev = [
   "mypy>=1.17.1",
+  "openai==2.45.0",
+  "pydantic-ai-slim[openai]==2.30.0",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "respx>=0.22.0",
