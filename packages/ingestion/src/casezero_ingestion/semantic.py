@@ -37,8 +37,19 @@ class SemanticInterpreter:
         self._router = router
 
     async def interpret(self, case_id: UUID, unit: StructuralUnit, disposition: ProcessingDisposition) -> tuple[EvidenceItem, ...]:
+        if disposition in {ProcessingDisposition.LINK_ONLY, ProcessingDisposition.EXCLUDED}:
+            raise PermissionError(f"semantic processing denied for {disposition.value}")
         prompt = json.dumps({"instruction":"Extract only directly supported observations. Do not invent ids.","allowed_structural_unit_id":str(unit.id),"allowed_source_document_id":str(unit.source_document_id),"locator":unit.locator.model_dump(mode="json"),"payload":unit.payload}, sort_keys=True)
-        result = await self._router.generate(ReasoningRequest(stage="evidence", prompt=prompt, output_type=EvidenceBatch), disposition)
+        result = await self._router.generate(
+            ReasoningRequest(
+                stage="evidence",
+                prompt=prompt,
+                output_type=EvidenceBatch,
+                case_id=case_id,
+                structural_unit_ids=(unit.id,),
+            ),
+            disposition,
+        )
         items: list[EvidenceItem] = []
         for observation in result.output.observations:
             if observation.structural_unit_id != unit.id or observation.source_document_id != unit.source_document_id:

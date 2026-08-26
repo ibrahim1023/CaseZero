@@ -53,9 +53,13 @@ class LocalSourceStore:
         )
 
     def get(self, storage_path: Path) -> bytes:
-        if not self._is_content_addressed_path(storage_path):
+        resolved = (self._root / storage_path).resolve()
+        if (
+            not resolved.is_relative_to(self._root)
+            or not self._is_content_addressed_path(storage_path)
+        ):
             raise ValueError("storage_path must be a content-addressed path")
-        return (self._root / storage_path).read_bytes()
+        return resolved.read_bytes()
 
     @staticmethod
     def _is_content_addressed_path(storage_path: Path) -> bool:

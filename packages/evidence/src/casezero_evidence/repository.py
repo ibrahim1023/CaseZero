@@ -28,9 +28,68 @@ class ProcessableSource:
     processing_disposition: str
 
 
+@dataclass(frozen=True, slots=True)
+class StoredSourceRecord:
+    document: SourceDocument
+    storage_path: str
+
+
 class EvidenceRepository:
     def __init__(self, connection: AsyncConnection[tuple[object, ...]]) -> None:
         self._connection = connection
+
+    async def get_case_id(self, ntsb_number: str) -> UUID | None:
+        cursor = await self._connection.execute(
+            "select id from public.cases where ntsb_number = %s", (ntsb_number,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row is not None and isinstance(row[0], UUID) else None
+
+    async def record_processing_skip(
+        self, docket_item_id: UUID, reason: str, created_at: datetime
+    ) -> None:
+        await self._connection.execute(
+            """
+            insert into public.processing_skips (
+              docket_item_id, status, reason, created_at
+            ) values (%s, 'SKIPPED_RIGHTS', %s, %s)
+            on conflict (docket_item_id, status) do update set
+              reason = excluded.reason, created_at = excluded.created_at
+            """,
+            (docket_item_id, reason, created_at),
+        )
+
+    async def get_source_document(
+        self, case_id: UUID, source_url: str
+    ) -> StoredSourceRecord | None:
+        cursor = await self._connection.execute(
+            """
+            select id, case_id, title, source_url, published_at, evidence_date,
+                   retrieved_at, document_type, visibility, checksum, storage_path
+            from public.source_documents
+            where case_id = %s and source_url = %s
+            """,
+            (case_id, source_url),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        document = SourceDocument.model_validate(
+            {
+                "id": row[0],
+                "case_id": row[1],
+                "title": row[2],
+                "source_url": row[3],
+                "published_at": row[4],
+                "evidence_date": row[5],
+                "retrieved_at": row[6],
+                "document_type": row[7],
+                "visibility": row[8],
+                "checksum": row[9],
+            },
+            strict=False,
+        )
+        return StoredSourceRecord(document=document, storage_path=str(row[10]))
 
     async def upsert_docket_item(self, item: DocketItem) -> UUID:
         if item.processing_disposition is None:
@@ -89,7 +148,9 @@ class EvidenceRepository:
             """
             insert into public.source_blobs (checksum, storage_path, byte_size)
             values (%s, %s, %s)
-            on conflict (checksum) do nothing
+            on conflict (checksum) do update set byte_size = excluded.byte_size
+            where public.source_blobs.storage_path = excluded.storage_path
+              and public.source_blobs.byte_size = 0
             """,
             (document.checksum, storage_path, byte_size),
         )
@@ -108,7 +169,10 @@ class EvidenceRepository:
               published_at, evidence_date, retrieved_at, document_type,
               visibility, checksum, storage_path
             ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            on conflict (case_id, source_url) do nothing
+            on conflict (case_id, source_url) do update set
+              docket_item_id = excluded.docket_item_id,
+              blob_checksum = excluded.blob_checksum
+            where public.source_documents.checksum = excluded.checksum
             returning checksum
             """,
             (
@@ -234,6 +298,22 @@ class EvidenceRepository:
             retryable,
         )
 
+    async def mark_processing_run_unsupported(
+        self,
+        run_id: UUID,
+        completed_at: datetime,
+        error_type: str,
+        error_message: str,
+    ) -> None:
+        await self._set_run_result(
+            run_id,
+            ProcessingStatus.UNSUPPORTED,
+            completed_at,
+            error_type,
+            error_message,
+            False,
+        )
+
     async def _set_run_result(
         self,
         run_id: UUID,
@@ -254,6 +334,13 @@ class EvidenceRepository:
         )
         if await cursor.fetchone() is None:
             raise LookupError(f"processing run {run_id} does not exist")
+
+    async def add_artifact_with_units(
+        self, artifact: DerivedArtifact, units: tuple[StructuralUnit, ...]
+    ) -> None:
+        async with self._connection.transaction():
+            await self.add_derived_artifact(artifact)
+            await self.add_structural_units(units)
 
     async def add_derived_artifact(self, artifact: DerivedArtifact) -> None:
         await self._connection.execute(
@@ -300,6 +387,38 @@ class EvidenceRepository:
                 ),
             )
 
+    async def get_structural_units_for_run(
+        self, run_id: UUID
+    ) -> tuple[StructuralUnit, ...]:
+        cursor = await self._connection.execute(
+            """
+            select u.id, u.derived_artifact_id, u.source_document_id, u.kind,
+                   u.ordinal, u.content_checksum, u.locator, u.payload
+            from public.structural_units u
+            join public.derived_artifacts a on a.id = u.derived_artifact_id
+            where a.processing_run_id = %s
+            order by u.ordinal
+            """,
+            (run_id,),
+        )
+        rows = await cursor.fetchall()
+        return tuple(
+            StructuralUnit.model_validate(
+                {
+                    "id": row[0],
+                    "derived_artifact_id": row[1],
+                    "source_document_id": row[2],
+                    "kind": row[3],
+                    "ordinal": row[4],
+                    "content_checksum": row[5],
+                    "locator": row[6],
+                    "payload": row[7],
+                },
+                strict=False,
+            )
+            for row in rows
+        )
+
     async def add_evidence_items(
         self, items: tuple[EvidenceItem, ...], created_at: datetime
     ) -> None:
@@ -326,6 +445,99 @@ class EvidenceRepository:
                 ),
             )
 
+    async def get_evidence_items_for_unit(
+        self, structural_unit_id: UUID
+    ) -> tuple[EvidenceItem, ...]:
+        cursor = await self._connection.execute(
+            """
+            select item from public.evidence_items
+            where structural_unit_id = %s
+            order by created_at, id
+            """,
+            (structural_unit_id,),
+        )
+        rows = await cursor.fetchall()
+        return tuple(EvidenceItem.model_validate(row[0], strict=False) for row in rows)
+
+    async def record_model_run(
+        self,
+        *,
+        run_id: UUID,
+        case_id: UUID,
+        parent_run_id: UUID | None,
+        stage: str,
+        provider: str,
+        model: str,
+        prompt_hash: str,
+        structural_unit_ids: tuple[UUID, ...],
+        input_tokens: int | None,
+        output_tokens: int | None,
+        latency_ms: int,
+        retry_count: int,
+        schema_failure_count: int,
+        status: str,
+        created_at: datetime,
+    ) -> None:
+        await self._connection.execute(
+            """
+            insert into public.model_runs (
+              id, case_id, parent_run_id, stage, provider, model, prompt_hash,
+              structural_unit_ids, input_tokens, output_tokens, latency_ms,
+              retry_count, schema_failure_count, status, created_at
+            ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            on conflict (id) do nothing
+            """,
+            (
+                run_id,
+                case_id,
+                parent_run_id,
+                stage,
+                provider,
+                model,
+                prompt_hash,
+                list(structural_unit_ids),
+                input_tokens,
+                output_tokens,
+                latency_ms,
+                retry_count,
+                schema_failure_count,
+                status,
+                created_at,
+            ),
+        )
+
+    async def has_successful_model_run(
+        self,
+        case_id: UUID,
+        stage: str,
+        structural_unit_ids: tuple[UUID, ...],
+    ) -> bool:
+        cursor = await self._connection.execute(
+            """
+            select 1 from public.model_runs
+            where case_id = %s and stage = %s and structural_unit_ids = %s
+              and status = 'SUCCEEDED'
+            limit 1
+            """,
+            (case_id, stage, list(structural_unit_ids)),
+        )
+        return await cursor.fetchone() is not None
+
+    async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]:
+        if not run_ids:
+            return {}
+        cursor = await self._connection.execute(
+            """
+            select provider || '/' || model, count(*)
+            from public.model_runs
+            where id = any(%s) and status = 'SUCCEEDED'
+            group by provider, model
+            order by provider, model
+            """,
+            (list(dict.fromkeys(run_ids)),),
+        )
+        return {str(row[0]): int(str(row[1])) for row in await cursor.fetchall()}
+
     async def add_candidates(
         self, candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]
     ) -> None:
@@ -339,6 +551,14 @@ class EvidenceRepository:
             else:
                 table = "timeline_candidates"
                 evidence_ids = candidate.evidence_ids
+            unique_evidence_ids = tuple(dict.fromkeys(evidence_ids))
+            evidence_cursor = await self._connection.execute(
+                "select id from public.evidence_items where id = any(%s)",
+                (list(unique_evidence_ids),),
+            )
+            persisted_ids = {row[0] for row in await evidence_cursor.fetchall()}
+            if persisted_ids != set(unique_evidence_ids):
+                raise ValueError("candidate references evidence that is not persisted")
             await self._connection.execute(
                 f"""
                 insert into public.{table} (
@@ -350,7 +570,7 @@ class EvidenceRepository:
                     candidate.id,
                     candidate.case_id,
                     candidate.model_run_id,
-                    list(dict.fromkeys(evidence_ids)),
+                    list(unique_evidence_ids),
                     Jsonb(candidate.model_dump(mode="json")),
                     candidate.created_at,
                 ),

@@ -27,6 +27,9 @@ class ImageProcessor:
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
         return media_type in {DetectedMediaType.PNG, DetectedMediaType.JPEG}
 
+    def configuration(self) -> dict[str, JsonValue]:
+        return {}
+
     def process(self, source: ProcessingSource) -> StructuralOutput:
         try:
             with Image.open(io.BytesIO(source.data)) as image:

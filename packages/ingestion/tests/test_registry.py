@@ -20,6 +20,9 @@ class FixtureProcessor:
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
         return media_type is self.media_type
 
+    def configuration(self) -> dict[str, object]:
+        return {}
+
     def process(self, source: ProcessingSource) -> StructuralOutput:
         raise NotImplementedError
 

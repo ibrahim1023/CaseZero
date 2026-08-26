@@ -117,6 +117,12 @@ class PdfProcessor:
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
         return media_type is DetectedMediaType.PDF
 
+    def configuration(self) -> dict[str, JsonValue]:
+        return {
+            "minimum_characters": self._scan_config.minimum_characters,
+            "minimum_image_coverage": self._scan_config.minimum_image_coverage,
+        }
+
     def process(self, source: ProcessingSource) -> StructuralOutput:
         parsed = self._adapter.convert(source.data)
         units: list[StructuralUnitDraft] = []

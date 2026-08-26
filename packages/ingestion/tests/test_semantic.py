@@ -20,8 +20,10 @@ ARTIFACT_ID = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e72")
 class FakeRouter:
     def __init__(self, structural_unit_id: UUID) -> None:
         self.structural_unit_id = structural_unit_id
+        self.calls = 0
 
     async def generate(self, request, disposition):
+        self.calls += 1
         output = EvidenceBatch(observations=(EvidenceObservation(structural_unit_id=self.structural_unit_id, source_document_id=DOC_ID, type=EvidenceType.TEXT, observation="Cable was fractured after impact.", confidence=0.6),))
         return ReasoningResult(output=output, model_name="fake", fallback_used=False)
 
@@ -39,6 +41,17 @@ async def test_interpreter_creates_grounded_pending_review_evidence() -> None:
     assert items[0].source_locator == structural_unit.locator
     assert items[0].review_status is ReviewStatus.PENDING
     assert items[0].entities == ()
+
+
+@pytest.mark.asyncio
+async def test_interpreter_denies_link_only_before_router_call() -> None:
+    structural_unit = unit()
+    router = FakeRouter(structural_unit.id)
+    with pytest.raises(PermissionError, match="LINK_ONLY"):
+        await SemanticInterpreter(router).interpret(
+            CASE_ID, structural_unit, ProcessingDisposition.LINK_ONLY
+        )
+    assert router.calls == 0
 
 
 @pytest.mark.asyncio

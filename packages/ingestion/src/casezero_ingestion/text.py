@@ -10,6 +10,7 @@ from casezero_evidence import (
     StructuralUnitKind,
     TextLocator,
 )
+from pydantic import JsonValue
 
 from casezero_ingestion.media import DetectedMediaType
 from casezero_ingestion.processors import StructuralOutput, StructuralUnitDraft
@@ -41,6 +42,9 @@ class TextProcessor:
 
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
         return media_type in {DetectedMediaType.TEXT, DetectedMediaType.HTML}
+
+    def configuration(self) -> dict[str, JsonValue]:
+        return {}
 
     def process(self, source: ProcessingSource) -> StructuralOutput:
         text = source.data.decode("utf-8")

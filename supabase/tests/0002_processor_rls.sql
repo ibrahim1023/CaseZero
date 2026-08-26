@@ -1,6 +1,7 @@
 begin;
 
-select plan(4);
+select plan(5);
+select extensions.has_table('public', 'processing_skips', 'rights skips have an audit table');
 
 insert into public.cases (id, ntsb_number, title, state)
 values ('10000000-0000-0000-0000-000000000001', 'TEST-PHASE1', 'Fixture', 'BLIND');

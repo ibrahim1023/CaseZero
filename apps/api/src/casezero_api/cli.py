@@ -16,6 +16,7 @@ from casezero_ntsb.manifest import load_manifest
 from psycopg import AsyncConnection
 
 from casezero_api.ingest import IngestService, IngestSummary
+from casezero_api.process import ProcessCaseError, process_from_environment
 from casezero_api.repository import AcquisitionRepository
 
 app = typer.Typer(no_args_is_help=True)
@@ -24,6 +25,16 @@ app = typer.Typer(no_args_is_help=True)
 @app.callback()
 def main() -> None:
     pass
+
+
+@app.command("process")
+def process_command(ntsb_number: str) -> None:
+    try:
+        report = asyncio.run(process_from_environment(ntsb_number))
+    except ProcessCaseError as error:
+        typer.echo(f"Processing failed: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    typer.echo(report.to_json())
 
 
 @app.command()

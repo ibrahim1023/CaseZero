@@ -57,7 +57,19 @@ class CandidateProposer:
     async def propose(self, case_id: UUID, evidence: tuple[EvidenceItem, ...], disposition: ProcessingDisposition, created_at: datetime) -> tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]:
         allowed = {item.id for item in evidence}
         payload = [{"id": str(item.id), "observation": item.observation, "type": item.type.value, "confidence": item.confidence} for item in evidence]
-        request = ReasoningRequest(stage="candidates", prompt=json.dumps(payload, sort_keys=True), output_type=CandidateSet)
+        request = ReasoningRequest(
+            stage="candidates",
+            prompt=json.dumps(payload, sort_keys=True),
+            output_type=CandidateSet,
+            case_id=case_id,
+            structural_unit_ids=tuple(
+                dict.fromkeys(
+                    item.structural_unit_id
+                    for item in evidence
+                    if item.structural_unit_id is not None
+                )
+            ),
+        )
         result = await self._router.generate(request, disposition)
         output: list[ClaimCandidate | EntityCandidate | TimelineCandidate] = []
         for claim_draft in result.output.claims:

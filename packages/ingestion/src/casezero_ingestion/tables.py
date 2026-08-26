@@ -28,6 +28,9 @@ class TableProcessor:
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
         return media_type in {DetectedMediaType.CSV, DetectedMediaType.XLSX}
 
+    def configuration(self) -> dict[str, JsonValue]:
+        return {"row_group_size": self._row_group_size}
+
     def process(self, source: ProcessingSource) -> StructuralOutput:
         sheets = self._read(source)
         units: list[StructuralUnitDraft] = []
