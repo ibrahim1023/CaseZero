@@ -408,13 +408,13 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
         ) as connection:
             source_store = SupabaseSourceStore(
                 settings.supabase_url,
-                settings.supabase_service_role_key.get_secret_value(),
+                settings.supabase_secret_key.get_secret_value(),
                 settings.source_bucket,
                 client=storage_client,
             )
             artifact_store = SupabaseArtifactStore(
                 settings.supabase_url,
-                settings.supabase_service_role_key.get_secret_value(),
+                settings.supabase_secret_key.get_secret_value(),
                 settings.derived_bucket,
                 client=storage_client,
             )

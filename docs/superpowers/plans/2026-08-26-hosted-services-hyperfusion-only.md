@@ -62,7 +62,8 @@ def test_source_upload_uses_private_content_address_and_verifies_bytes():
         CASE_ID, "report.pdf", DATA
     )
 
-    assert upload.calls[0].request.headers["authorization"] == f"Bearer {SERVICE_KEY}"
+    assert "authorization" not in upload.calls[0].request.headers
+    assert upload.calls[0].request.headers["apikey"] == SERVICE_KEY
     assert stored.checksum == SHA
 ```
 
@@ -262,7 +263,7 @@ git commit -m "feat(platform): add hosted Supabase environment gate"
 
 **Prerequisite:** owner-provided Supabase Free project credentials configured
 securely on this machine: project reference/access token, hosted DB URL,
-Supabase URL, and service-role key.
+Supabase URL, secret key, publishable key, and JWKS URL.
 
 - [ ] **Step 1: Confirm secret names only**
 

@@ -172,7 +172,7 @@ Runtime requires:
 
 - `DATABASE_URL`: hosted direct/pooler connection suitable for psycopg;
 - `SUPABASE_URL`;
-- `SUPABASE_SERVICE_ROLE_KEY` (backend only);
+- `SUPABASE_SECRET_KEY` (backend only);
 - `SUPABASE_SOURCE_BUCKET=casezero-sources`;
 - `SUPABASE_DERIVED_BUCKET=casezero-derived`;
 - `HYPERFUSION_API_KEY` and `HYPERFUSION_BASE_URL`;

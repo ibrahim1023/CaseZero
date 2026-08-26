@@ -89,7 +89,7 @@ async def ingest_from_environment(
                     http_client=http_client,
                     store=SupabaseSourceStore(
                         settings.supabase_url,
-                        settings.supabase_service_role_key.get_secret_value(),
+                        settings.supabase_secret_key.get_secret_value(),
                         settings.source_bucket,
                         client=storage_client,
                     ),

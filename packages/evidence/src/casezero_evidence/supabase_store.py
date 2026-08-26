@@ -31,7 +31,6 @@ class _SupabaseStorage:
     def put_verified(self, storage_path: Path, data: bytes, error_type: type[RuntimeError]) -> None:
         url = self._object_url(storage_path)
         headers = {
-            "Authorization": f"Bearer {self._service_key}",
             "apikey": self._service_key,
             "Content-Type": "application/octet-stream",
             "x-upsert": "false",
@@ -41,7 +40,7 @@ class _SupabaseStorage:
             response.raise_for_status()
         fetched = self._client.get(
             url,
-            headers={"Authorization": headers["Authorization"], "apikey": self._service_key},
+            headers={"apikey": self._service_key},
             timeout=120,
         )
         fetched.raise_for_status()
@@ -53,10 +52,7 @@ class _SupabaseStorage:
             raise ValueError("invalid hosted content-addressed path")
         response = self._client.get(
             self._object_url(storage_path),
-            headers={
-                "Authorization": f"Bearer {self._service_key}",
-                "apikey": self._service_key,
-            },
+            headers={"apikey": self._service_key},
             timeout=120,
         )
         response.raise_for_status()

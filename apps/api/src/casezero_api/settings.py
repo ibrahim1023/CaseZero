@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from psycopg.conninfo import conninfo_to_dict
 from pydantic import SecretStr
 
 
@@ -10,7 +11,9 @@ from pydantic import SecretStr
 class HostedSettings:
     database_url: SecretStr
     supabase_url: str
-    supabase_service_role_key: SecretStr
+    supabase_secret_key: SecretStr
+    supabase_publishable_key: SecretStr
+    supabase_jwks_url: str
     source_bucket: str
     derived_bucket: str
     hyperfusion_api_key: SecretStr
@@ -27,7 +30,9 @@ class HostedSettings:
         required = {
             "DATABASE_URL": "database_url",
             "SUPABASE_URL": "supabase_url",
-            "SUPABASE_SERVICE_ROLE_KEY": "supabase_service_role_key",
+            "SUPABASE_SECRET_KEY": "supabase_secret_key",
+            "SUPABASE_PUBLISHABLE_KEY": "supabase_publishable_key",
+            "SUPABASE_JWKS_URL": "supabase_jwks_url",
             "SUPABASE_SOURCE_BUCKET": "source_bucket",
             "SUPABASE_DERIVED_BUCKET": "derived_bucket",
             "HYPERFUSION_API_KEY": "hyperfusion_api_key",
@@ -40,12 +45,16 @@ class HostedSettings:
             raise ValueError(f"missing hosted setting: {', '.join(sorted(missing))}")
         database_url = values["DATABASE_URL"]
         supabase_url = values["SUPABASE_URL"]
-        if _is_local(database_url) or _is_local(supabase_url):
+        database_host_value = conninfo_to_dict(database_url).get("host")
+        database_host = str(database_host_value) if database_host_value is not None else None
+        if _is_local_host(database_host) or _is_local_url(supabase_url):
             raise ValueError("hosted runtime URLs must not use localhost or loopback")
         return cls(
             database_url=SecretStr(database_url),
             supabase_url=supabase_url.rstrip("/"),
-            supabase_service_role_key=SecretStr(values["SUPABASE_SERVICE_ROLE_KEY"]),
+            supabase_secret_key=SecretStr(values["SUPABASE_SECRET_KEY"]),
+            supabase_publishable_key=SecretStr(values["SUPABASE_PUBLISHABLE_KEY"]),
+            supabase_jwks_url=values["SUPABASE_JWKS_URL"],
             source_bucket=values["SUPABASE_SOURCE_BUCKET"],
             derived_bucket=values["SUPABASE_DERIVED_BUCKET"],
             hyperfusion_api_key=SecretStr(values["HYPERFUSION_API_KEY"]),
@@ -55,6 +64,9 @@ class HostedSettings:
         )
 
 
-def _is_local(url: str) -> bool:
-    host = urlparse(url).hostname
+def _is_local_url(url: str) -> bool:
+    return _is_local_host(urlparse(url).hostname)
+
+
+def _is_local_host(host: str | None) -> bool:
     return host in {"localhost", "127.0.0.1", "::1"}

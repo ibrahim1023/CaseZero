@@ -6,7 +6,9 @@ def values() -> dict[str, str]:
     return {
         "DATABASE_URL": "postgresql://user:pass@db.example.supabase.co:5432/postgres",
         "SUPABASE_URL": "https://project.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "secret-service-key",
+        "SUPABASE_SECRET_KEY": "secret-service-key",
+        "SUPABASE_PUBLISHABLE_KEY": "publishable-key",
+        "SUPABASE_JWKS_URL": "https://project.supabase.co/auth/v1/.well-known/jwks.json",
         "SUPABASE_SOURCE_BUCKET": "casezero-sources",
         "SUPABASE_DERIVED_BUCKET": "casezero-derived",
         "HYPERFUSION_API_KEY": "secret-hyperfusion-key",
@@ -18,8 +20,8 @@ def values() -> dict[str, str]:
 
 def test_hosted_settings_require_all_service_configuration() -> None:
     configured = values()
-    del configured["SUPABASE_SERVICE_ROLE_KEY"]
-    with pytest.raises(ValueError, match="SUPABASE_SERVICE_ROLE_KEY"):
+    del configured["SUPABASE_SECRET_KEY"]
+    with pytest.raises(ValueError, match="SUPABASE_SECRET_KEY"):
         HostedSettings.from_mapping(configured)
 
 

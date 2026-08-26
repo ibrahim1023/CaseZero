@@ -26,7 +26,8 @@ def test_source_upload_is_private_content_addressed_and_verified() -> None:
         stored = SupabaseSourceStore(URL, KEY, BUCKET, client=client).put(
             CASE_ID, "report.pdf", DATA
         )
-    assert upload.calls[0].request.headers["authorization"] == f"Bearer {KEY}"
+    assert "authorization" not in upload.calls[0].request.headers
+    assert upload.calls[0].request.headers["apikey"] == KEY
     assert upload.calls[0].request.headers["x-upsert"] == "false"
     assert stored.checksum == SHA
     assert stored.storage_path == Path("sources") / SHA[:2] / SHA
