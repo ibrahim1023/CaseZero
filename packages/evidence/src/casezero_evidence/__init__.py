@@ -34,6 +34,7 @@ from casezero_evidence.processing import (
     StructuralUnit,
     StructuralUnitKind,
 )
+from casezero_evidence.supabase_store import SupabaseArtifactStore, SupabaseSourceStore
 
 __all__ = [
     "AudioLocator",
@@ -61,6 +62,8 @@ __all__ = [
     "SourceLocator",
     "StructuralUnit",
     "StructuralUnitKind",
+    "SupabaseArtifactStore",
+    "SupabaseSourceStore",
     "TableLocator",
     "TextLocator",
     "TimePrecision",
