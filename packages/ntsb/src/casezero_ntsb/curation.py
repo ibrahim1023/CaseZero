@@ -74,10 +74,7 @@ def validate_curated_manifest(manifest: CuratedCaseManifest) -> CurationReport:
         if source_url in seen_urls:
             errors.append(f"duplicate sourceUrl at item {index}")
         seen_urls.add(source_url)
-        processable = item.processing_disposition in {
-            ProcessingDisposition.AI_ALLOWED,
-            ProcessingDisposition.LOCAL_ONLY,
-        }
+        processable = item.processing_disposition is ProcessingDisposition.AI_ALLOWED
         if processable and item.expected_checksum is None:
             errors.append(f"processable item {index} is missing expectedChecksum")
         if not processable and item.expected_checksum is not None:

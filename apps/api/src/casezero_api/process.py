@@ -171,6 +171,7 @@ class CaseProcessingService:
             disposition = curated_item.processing_disposition
             dispositions[disposition.value] += 1
             if disposition in {
+                ProcessingDisposition.LOCAL_ONLY,
                 ProcessingDisposition.LINK_ONLY,
                 ProcessingDisposition.EXCLUDED,
             }:
@@ -438,13 +439,7 @@ def _model_router(repository: EvidenceRepository) -> ModelRouter:
         _required_environment("HYPERFUSION_API_KEY"),
         provider="hyperfusion",
     )
-    local = PydanticReasoningModel.openai_compatible(
-        os.getenv("OLLAMA_TEXT_MODEL", "qwen2.5:7b"),
-        os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-        "ollama",
-        provider="ollama",
-    )
-    return ModelRouter(primary, local, recorder=repository)
+    return ModelRouter(primary, recorder=repository)
 
 
 def _docket_item(case_id: UUID, item: CuratedDocketItem) -> DocketItem:

@@ -46,7 +46,7 @@ def curated_manifest() -> CuratedCaseManifest:
                 "reviewedAt": "2026-08-25T00:00:00Z",
                 "expectedChecksum": (
                     hashlib.sha256(data).hexdigest()
-                    if disposition != "LINK_ONLY"
+                    if disposition == "AI_ALLOWED"
                     else None
                 ),
             }
@@ -179,7 +179,7 @@ class CandidateProposer:
         self.disposition = None
 
     async def propose(self, case_id, evidence, disposition, created_at):
-        assert len(self.repository.evidence) == 2
+        assert len(self.repository.evidence) == 1
         self.events.append("candidates")
         self.disposition = disposition
         return (
@@ -219,25 +219,25 @@ async def test_case_processing_composes_curated_inventory_sources_semantics_and_
     report = await service.process_case("CEN22FA375", curated_manifest(), downloads)
 
     assert len(repository.docket_items) == 3
-    assert len(repository.documents) == 2
-    assert len(repository.skips) == 1
-    assert repository.skips[0][1].startswith("LINK_ONLY")
-    assert semantic.dispositions == [
-        ProcessingDisposition.AI_ALLOWED,
-        ProcessingDisposition.LOCAL_ONLY,
-    ]
-    assert proposer.disposition is ProcessingDisposition.LOCAL_ONLY
-    assert events == ["structural", "semantic", "semantic", "candidates"]
+    assert len(repository.documents) == 1
+    assert len(repository.skips) == 2
+    assert {reason.split(":", 1)[0] for _, reason in repository.skips} == {
+        "LINK_ONLY",
+        "LOCAL_ONLY",
+    }
+    assert semantic.dispositions == [ProcessingDisposition.AI_ALLOWED]
+    assert proposer.disposition is ProcessingDisposition.AI_ALLOWED
+    assert events == ["structural", "semantic", "candidates"]
     assert report.inventory_total == 3
     assert report.disposition_counts == {
         "AI_ALLOWED": 1,
         "LINK_ONLY": 1,
         "LOCAL_ONLY": 1,
     }
-    assert report.status_counts == {"SKIPPED_RIGHTS": 1, "SUCCEEDED": 2}
-    assert (report.artifacts, report.structural_units, report.evidence_items) == (2, 2, 2)
-    assert (report.candidates, report.review_pending) == (1, 1)
-    assert report.model_usage == {"fake-model": 3}
+    assert report.status_counts == {"SKIPPED_RIGHTS": 2, "SUCCEEDED": 1}
+    assert (report.artifacts, report.structural_units, report.evidence_items) == (1, 1, 1)
+    assert (report.candidates, report.review_pending) == (1, 0)
+    assert report.model_usage == {"fake-model": 2}
     assert "payload" not in report.to_json()
     assert "source 1" not in report.to_json()
 

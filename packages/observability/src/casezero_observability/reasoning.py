@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from casezero_evidence import ProcessingDisposition
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelAPIError, PromptedOutput, UnexpectedModelBehavior
+from pydantic_ai import Agent, ModelAPIError, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -75,34 +75,20 @@ class ModelRouter:
     def __init__(
         self,
         primary: StructuredModel,
-        local: StructuredModel,
         *,
         recorder: ModelRunRecorder | None = None,
     ) -> None:
         self._primary = primary
-        self._local = local
         self._recorder = recorder
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT], disposition: ProcessingDisposition
     ) -> ReasoningResult[OutputT]:
-        if disposition in {ProcessingDisposition.LINK_ONLY, ProcessingDisposition.EXCLUDED}:
+        if disposition is not ProcessingDisposition.AI_ALLOWED:
             raise ModelRoutingDenied(f"model routing denied for {disposition.value}")
-        if disposition is ProcessingDisposition.LOCAL_ONLY:
-            run_id = uuid4()
-            output = await self._run_model(self._local, request, run_id, None)
-            return ReasoningResult(output, self._local.name, False, run_id)
-
-        primary_run_id = uuid4()
-        try:
-            output = await self._run_model(self._primary, request, primary_run_id, None)
-            return ReasoningResult(output, self._primary.name, False, primary_run_id)
-        except ModelFailure:
-            fallback_run_id = uuid4()
-            output = await self._run_model(
-                self._local, request, fallback_run_id, primary_run_id
-            )
-            return ReasoningResult(output, self._local.name, True, fallback_run_id)
+        run_id = uuid4()
+        output = await self._run_model(self._primary, request, run_id, None)
+        return ReasoningResult(output, self._primary.name, False, run_id)
 
     async def _run_model[OutputT: BaseModel](
         self,
@@ -194,12 +180,7 @@ class PydanticReasoningModel:
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
     ) -> OutputT:
-        output_type = (
-            PromptedOutput(request.output_type)
-            if self.provider == "ollama"
-            else request.output_type
-        )
-        agent = Agent(self._model, output_type=output_type, retries=2)
+        agent = Agent(self._model, output_type=request.output_type, retries=2)
         try:
             result = await agent.run(request.prompt)
         except (UnexpectedModelBehavior, ModelAPIError) as error:

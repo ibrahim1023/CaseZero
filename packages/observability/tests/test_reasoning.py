@@ -21,45 +21,13 @@ class FakeModel:
     name: str
     fail: bool = False
     calls: int = 0
+    provider: str = "hyperfusion"
 
     async def generate(self, request: ReasoningRequest[Output]) -> Output:
         self.calls += 1
         if self.fail:
             raise ModelFailure("schema exhausted")
         return Output(value=self.name)
-
-
-@pytest.mark.asyncio
-async def test_ai_allowed_uses_primary_without_fallback() -> None:
-    primary, fallback = FakeModel("hyperfusion"), FakeModel("ollama")
-    result = await ModelRouter(primary, fallback).generate(
-        ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output),
-        ProcessingDisposition.AI_ALLOWED,
-    )
-    assert result.output.value == "hyperfusion"
-    assert (primary.calls, fallback.calls) == (1, 0)
-
-
-@pytest.mark.asyncio
-async def test_primary_failure_uses_ollama_fallback() -> None:
-    primary, fallback = FakeModel("hyperfusion", fail=True), FakeModel("ollama")
-    result = await ModelRouter(primary, fallback).generate(
-        ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output),
-        ProcessingDisposition.AI_ALLOWED,
-    )
-    assert result.output.value == "ollama"
-    assert result.fallback_used is True
-
-
-@pytest.mark.asyncio
-async def test_local_only_skips_external_primary_and_link_only_is_denied() -> None:
-    primary, fallback = FakeModel("hyperfusion"), FakeModel("ollama")
-    router = ModelRouter(primary, fallback)
-    request = ReasoningRequest(stage="vision", prompt="bounded", output_type=Output)
-    assert (await router.generate(request, ProcessingDisposition.LOCAL_ONLY)).output.value == "ollama"
-    assert primary.calls == 0
-    with pytest.raises(ModelRoutingDenied):
-        await router.generate(request, ProcessingDisposition.LINK_ONLY)
 
 
 class Recorder:
@@ -71,27 +39,40 @@ class Recorder:
 
 
 @pytest.mark.asyncio
-async def test_router_persists_failed_primary_and_successful_fallback_model_runs() -> None:
+async def test_ai_allowed_uses_hyperfusion() -> None:
+    model = FakeModel("hyperfusion")
+    result = await ModelRouter(model).generate(
+        ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output),
+        ProcessingDisposition.AI_ALLOWED,
+    )
+    assert result.output.value == "hyperfusion"
+    assert model.calls == 1
+
+
+@pytest.mark.parametrize(
+    "disposition",
+    [ProcessingDisposition.LOCAL_ONLY, ProcessingDisposition.LINK_ONLY, ProcessingDisposition.EXCLUDED],
+)
+@pytest.mark.asyncio
+async def test_non_ai_allowed_never_calls_model(disposition: ProcessingDisposition) -> None:
+    model = FakeModel("hyperfusion")
+    with pytest.raises(ModelRoutingDenied, match=disposition.value):
+        await ModelRouter(model).generate(
+            ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output), disposition
+        )
+    assert model.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_failed_hyperfusion_run_is_recorded_without_provider_fallback() -> None:
     case_id = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
-    unit_id = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e70")
     recorder = Recorder()
-    router = ModelRouter(
-        FakeModel("hyperfusion", fail=True),
-        FakeModel("ollama"),
-        recorder=recorder,
-    )
+    router = ModelRouter(FakeModel("hyperfusion", fail=True), recorder=recorder)
     request = ReasoningRequest(
-        stage="evidence",
-        prompt="bounded",
-        output_type=Output,
-        case_id=case_id,
-        structural_unit_ids=(unit_id,),
+        stage="evidence", prompt="bounded", output_type=Output, case_id=case_id
     )
-
-    result = await router.generate(request, ProcessingDisposition.AI_ALLOWED)
-
-    assert result.run_id == recorder.runs[1]["run_id"]
-    assert [run["status"] for run in recorder.runs] == ["FAILED", "SUCCEEDED"]
-    assert recorder.runs[1]["parent_run_id"] == recorder.runs[0]["run_id"]
+    with pytest.raises(ModelFailure):
+        await router.generate(request, ProcessingDisposition.AI_ALLOWED)
+    assert [run["status"] for run in recorder.runs] == ["FAILED"]
+    assert recorder.runs[0]["provider"] == "hyperfusion"
     assert recorder.runs[0]["prompt_hash"] == request.prompt_hash
-    assert recorder.runs[1]["structural_unit_ids"] == (unit_id,)

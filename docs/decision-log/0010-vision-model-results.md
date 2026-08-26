@@ -1,6 +1,6 @@
 # 0010 — Phase 1 vision model route
 
-**Date:** 2026-08-25 · **Status:** Accepted
+**Date:** 2026-08-25 · **Status:** Superseded by hosted Hyperfusion-only design (2026-08-26)
 
 ## Method
 
@@ -24,7 +24,9 @@ quality benchmark.
 
 ## Decision
 
-Use Hyperfusion `google/gemma-4-31b-it` as the Phase 1 AI_ALLOWED vision
-primary and local Ollama `qwen2.5vl:7b` as fallback and LOCAL_ONLY route. Every
+The original decision used Hyperfusion `google/gemma-4-31b-it` as primary and
+local Ollama `qwen2.5vl:7b` as fallback. The 2026-08-26 hosted-services design
+supersedes the fallback: Hyperfusion remains the only runtime provider and
+LOCAL_ONLY is audited-skipped. Every
 production observation remains INFERRED and reviewable. Re-evaluate with a
 larger image set before making quality or calibration claims.

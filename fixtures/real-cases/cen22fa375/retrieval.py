@@ -21,10 +21,7 @@ def main() -> None:
         raise RuntimeError("; ".join(report.errors))
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    processable = {
-        ProcessingDisposition.AI_ALLOWED,
-        ProcessingDisposition.LOCAL_ONLY,
-    }
+    processable = {ProcessingDisposition.AI_ALLOWED}
     with httpx.Client(follow_redirects=True, timeout=120) as client:
         downloaded = 0
         for index, item in enumerate(manifest.items, start=1):

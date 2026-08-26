@@ -30,17 +30,12 @@ def main() -> None:
     providers = [
         (
             "hyperfusion",
-            "google/gemma-4-31b-it",
+            os.getenv("CASEZERO_VISION_MODEL", "google/gemma-4-31b-it"),
             OpenAI(
                 api_key=os.environ["HYPERFUSION_API_KEY"],
                 base_url=os.environ["HYPERFUSION_BASE_URL"],
             ),
-        ),
-        (
-            "ollama",
-            "qwen2.5vl:7b",
-            OpenAI(api_key="ollama", base_url="http://localhost:11434/v1"),
-        ),
+        )
     ]
     records = []
     for provider, model, client in providers:

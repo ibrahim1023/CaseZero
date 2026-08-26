@@ -6,12 +6,14 @@ https://data.ntsb.gov/Docket/?NTSBNumber=CEN22FA375
 The manifest inventories all 15 public docket entries. It does not imply that
 public availability grants reuse or external-model-processing rights.
 
-Four NTSB-authored items are approved for Phase 1 retrieval:
+Three NTSB-authored items are approved for hosted Phase 1 retrieval:
 
 - NTSB Examination Report — `AI_ALLOWED`
 - Fire Specialist's Factual Report — `AI_ALLOWED`
 - Cockpit Display Specialist's Factual Report CSV attachment — `AI_ALLOWED`
-- Medical Factual Report — `LOCAL_ONLY` because it contains sensitive medical material
+
+The Medical Factual Report remains `LOCAL_ONLY` and is audited as skipped; with
+no approved local model/storage route, its bytes are not downloaded or processed.
 
 Items with unclear authorship, third-party records, manufacturer excerpts,
 personal statements, externally sourced data, or explicit third-party photo
