@@ -17,10 +17,9 @@ uv run mypy <changed package>
 uv run ruff check .
 uv run mypy
 uv run pytest                               # full offline gate: no network, no models
-supabase test db                            # RLS/visibility policy tests, if migrations changed
 ```
 
-All four must pass. If a change touched the visibility boundary, the job
+All three must pass. If a change touched the visibility boundary, the job
 queue, or locking, also run the attack fixtures:
 
 ```bash
@@ -36,11 +35,16 @@ uv run pytest tests/resume/ -v              # if workflow state changed
 3. Evidence-set hash recomputed and matches the manifest.
 4. Previous report for the case (if any) reviewed for regression.
 
-## Loop 4 — Live checks (opt-in, manual, never in CI)
+## Loop 4 — Hosted/live checks (opt-in, never in ordinary CI)
 
 ```bash
-CASEZERO_LIVE=1 uv run pytest -m live -v    # real NTSB fetch / real model smoke
+CASEZERO_HOSTED_TEST=1 uv run pytest -m hosted -v
+uv run python scripts/verify_hosted_supabase.py
+CASEZERO_LIVE=1 uv run pytest -m live -v    # real NTSB / Context.dev / Hyperfusion checks
 ```
+
+Hosted checks require an explicitly non-production Supabase project. Local
+Supabase/Docker is not a runtime or required verification dependency.
 
 ## Loop 5 — Before anything becomes public
 
