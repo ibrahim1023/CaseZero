@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from casezero_evidence import ProcessingDisposition
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelAPIError, UnexpectedModelBehavior
+from pydantic_ai import Agent, ModelAPIError, PromptedOutput, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -194,7 +194,12 @@ class PydanticReasoningModel:
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
     ) -> OutputT:
-        agent = Agent(self._model, output_type=request.output_type, retries=2)
+        output_type = (
+            PromptedOutput(request.output_type)
+            if self.provider == "ollama"
+            else request.output_type
+        )
+        agent = Agent(self._model, output_type=output_type, retries=2)
         try:
             result = await agent.run(request.prompt)
         except (UnexpectedModelBehavior, ModelAPIError) as error:
