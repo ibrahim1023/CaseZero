@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 import typer
-from casezero_evidence.source_store import LocalSourceStore
+from casezero_evidence.supabase_store import SupabaseSourceStore
 from casezero_ntsb.carol import CarolClient
 from casezero_ntsb.contextdev import ContextDevClient
 from casezero_ntsb.developer_api import NtsbApiClient, NtsbApiConfigurationError
@@ -18,6 +18,7 @@ from psycopg import AsyncConnection
 from casezero_api.ingest import IngestService, IngestSummary
 from casezero_api.process import ProcessCaseError, process_from_environment
 from casezero_api.repository import AcquisitionRepository
+from casezero_api.settings import HostedSettings
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -65,34 +66,40 @@ async def ingest_from_environment(
     manifest_path: Path | None,
     cutoff: datetime,
 ) -> IngestSummary:
-    database_url = _required_environment("DATABASE_URL")
-    async with httpx.AsyncClient(follow_redirects=True) as http_client:
-        case_lookup = _case_lookup(http_client)
-        if manifest_path is not None:
-            docket_manifest = load_manifest(manifest_path)
-        else:
-            context_client = ContextDevClient(
-                api_key=_required_environment("CONTEXTDEV_API_KEY"),
-                http_client=http_client,
-            )
-            docket_manifest = await context_client.extract_manifest(
-                "https://data.ntsb.gov/Docket/?NTSBNumber=" + quote(ntsb_number, safe="")
-            )
+    settings = HostedSettings.from_environment()
+    with httpx.Client() as storage_client:
+        async with httpx.AsyncClient(follow_redirects=True) as http_client:
+            case_lookup = _case_lookup(http_client)
+            if manifest_path is not None:
+                docket_manifest = load_manifest(manifest_path)
+            else:
+                context_client = ContextDevClient(
+                    api_key=_required_environment("CONTEXTDEV_API_KEY"),
+                    http_client=http_client,
+                )
+                docket_manifest = await context_client.extract_manifest(
+                    "https://data.ntsb.gov/Docket/?NTSBNumber=" + quote(ntsb_number, safe="")
+                )
 
-        async with await AsyncConnection.connect(database_url) as connection:
-            repository = AcquisitionRepository(connection)
-            downloader = NtsbSourceDownloader(
-                http_client=http_client,
-                store=LocalSourceStore(
-                    Path(os.getenv("CASEZERO_SOURCE_ROOT", "data/sources"))
-                ),
-                repository=repository,
-            )
-            return await IngestService(
-                case_lookup=case_lookup,
-                downloader=downloader,
-                repository=repository,
-            ).ingest(ntsb_number, docket_manifest, cutoff=cutoff)
+            async with await AsyncConnection.connect(
+                settings.database_url.get_secret_value()
+            ) as connection:
+                repository = AcquisitionRepository(connection)
+                downloader = NtsbSourceDownloader(
+                    http_client=http_client,
+                    store=SupabaseSourceStore(
+                        settings.supabase_url,
+                        settings.supabase_service_role_key.get_secret_value(),
+                        settings.source_bucket,
+                        client=storage_client,
+                    ),
+                    repository=repository,
+                )
+                return await IngestService(
+                    case_lookup=case_lookup,
+                    downloader=downloader,
+                    repository=repository,
+                ).ingest(ntsb_number, docket_manifest, cutoff=cutoff)
 
 
 def _case_lookup(http_client: httpx.AsyncClient) -> CarolClient | NtsbApiClient:

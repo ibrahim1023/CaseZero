@@ -1,5 +1,4 @@
 import hashlib
-import os
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -7,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
+import httpx
 from casezero_evidence import (
     ClaimCandidate,
     DocketItem,
@@ -21,9 +21,9 @@ from casezero_evidence import (
     TimelineCandidate,
     Visibility,
 )
-from casezero_evidence.artifact_store import LocalArtifactStore
 from casezero_evidence.repository import EvidenceRepository, StoredSourceRecord
-from casezero_evidence.source_store import LocalSourceStore, SourceStore, StoreIntegrityError
+from casezero_evidence.source_store import SourceStore, StoreIntegrityError
+from casezero_evidence.supabase_store import SupabaseArtifactStore, SupabaseSourceStore
 from casezero_ingestion.candidates import CandidateProposer
 from casezero_ingestion.images import ImageProcessor
 from casezero_ingestion.orchestrator import (
@@ -49,6 +49,8 @@ from casezero_observability import (
     PydanticReasoningModel,
 )
 from psycopg import AsyncConnection
+
+from casezero_api.settings import HostedSettings
 
 
 class ProcessCaseError(RuntimeError):
@@ -146,7 +148,7 @@ class CaseProcessingService:
         self,
         ntsb_number: str,
         manifest: CuratedCaseManifest,
-        downloads_root: Path,
+        downloads_root: Path | None,
     ) -> ProcessingReport:
         if manifest.case_id != ntsb_number:
             raise ProcessCaseError("curated manifest caseId does not match requested case")
@@ -336,10 +338,12 @@ class CaseProcessingService:
         curated_item: CuratedDocketItem,
         docket_item: DocketItem,
         docket_item_id: UUID,
-        downloads_root: Path,
+        downloads_root: Path | None,
     ) -> ProcessingSource:
         suffix = curated_item.file_type or "bin"
-        downloaded_path = downloads_root / f"{index:02d}.{suffix}"
+        downloaded_path = (
+            downloads_root / f"{index:02d}.{suffix}" if downloads_root is not None else None
+        )
         existing = await self._repository.get_source_document(
             case_id, str(curated_item.source_url)
         )
@@ -348,19 +352,21 @@ class CaseProcessingService:
             and existing.document.visibility is not Visibility.INVESTIGATION_EVIDENCE
         ):
             raise ValueError(f"stored source is not investigation evidence for item {index:02d}")
-        if downloaded_path.is_file():
-            data = downloaded_path.read_bytes()
-            retrieved_at = datetime.fromtimestamp(downloaded_path.stat().st_mtime, UTC)
-        elif existing is not None:
+        if existing is not None:
             data = self._source_store.get(Path(existing.storage_path))
             retrieved_at = existing.document.retrieved_at
+        elif downloaded_path is not None and downloaded_path.is_file():
+            data = downloaded_path.read_bytes()
+            retrieved_at = datetime.fromtimestamp(downloaded_path.stat().st_mtime, UTC)
         else:
-            raise FileNotFoundError(f"eligible source file is missing: {downloaded_path}")
+            raise FileNotFoundError(
+                f"eligible hosted source is missing for item {index:02d}"
+            )
 
         checksum = hashlib.sha256(data).hexdigest()
         if checksum != curated_item.expected_checksum:
             raise ValueError(f"eligible source checksum mismatch for item {index:02d}")
-        stored = self._source_store.put(case_id, downloaded_path.name, data)
+        stored = self._source_store.put(case_id, f"{index:02d}.{suffix}", data)
         if existing is not None:
             if existing.document.checksum != checksum:
                 raise ValueError(f"stored source checksum mismatch for item {index:02d}")
@@ -394,49 +400,52 @@ def load_reference_manifest(ntsb_number: str) -> CuratedCaseManifest:
 
 
 async def process_from_environment(ntsb_number: str) -> ProcessingReport:
-    database_url = _required_environment("DATABASE_URL")
+    settings = HostedSettings.from_environment()
     manifest = load_reference_manifest(ntsb_number)
-    repository_root = _repository_root()
-    downloads_root = Path(
-        os.getenv(
-            "CASEZERO_CASE_DATA_ROOT",
-            str(repository_root / "data" / "real-cases" / ntsb_number.casefold()),
-        )
-    )
-    source_store = LocalSourceStore(Path(os.getenv("CASEZERO_SOURCE_ROOT", "data/sources")))
-    artifact_store = LocalArtifactStore(
-        Path(os.getenv("CASEZERO_ARTIFACT_ROOT", "data/artifacts"))
-    )
+    with httpx.Client() as storage_client:
+        async with await AsyncConnection.connect(
+            settings.database_url.get_secret_value()
+        ) as connection:
+            source_store = SupabaseSourceStore(
+                settings.supabase_url,
+                settings.supabase_service_role_key.get_secret_value(),
+                settings.source_bucket,
+                client=storage_client,
+            )
+            artifact_store = SupabaseArtifactStore(
+                settings.supabase_url,
+                settings.supabase_service_role_key.get_secret_value(),
+                settings.derived_bucket,
+                client=storage_client,
+            )
+            repository = EvidenceRepository(connection)
+            router = _model_router(repository, settings)
+            orchestrator = ProcessingOrchestrator(
+                ProcessorRegistry(
+                    (
+                        PdfProcessor(DoclingPdfAdapter()),
+                        TableProcessor(),
+                        TextProcessor(),
+                        ImageProcessor(),
+                    )
+                ),
+                repository,
+                artifact_store,
+            )
+            return await CaseProcessingService(
+                repository=repository,
+                source_store=source_store,
+                structural_orchestrator=orchestrator,
+                semantic_interpreter=SemanticInterpreter(router),
+                candidate_proposer=CandidateProposer(router),
+            ).process_case(ntsb_number, manifest, None)
 
-    async with await AsyncConnection.connect(database_url) as connection:
-        repository = EvidenceRepository(connection)
-        router = _model_router(repository)
-        orchestrator = ProcessingOrchestrator(
-            ProcessorRegistry(
-                (
-                    PdfProcessor(DoclingPdfAdapter()),
-                    TableProcessor(),
-                    TextProcessor(),
-                    ImageProcessor(),
-                )
-            ),
-            repository,
-            artifact_store,
-        )
-        return await CaseProcessingService(
-            repository=repository,
-            source_store=source_store,
-            structural_orchestrator=orchestrator,
-            semantic_interpreter=SemanticInterpreter(router),
-            candidate_proposer=CandidateProposer(router),
-        ).process_case(ntsb_number, manifest, downloads_root)
 
-
-def _model_router(repository: EvidenceRepository) -> ModelRouter:
+def _model_router(repository: EvidenceRepository, settings: HostedSettings) -> ModelRouter:
     primary = PydanticReasoningModel.openai_compatible(
-        os.getenv("CASEZERO_TEXT_MODEL", "qwen/qwen3-32b"),
-        os.getenv("HYPERFUSION_BASE_URL", "https://api.hyperfusion.io/v1"),
-        _required_environment("HYPERFUSION_API_KEY"),
+        settings.text_model,
+        settings.hyperfusion_base_url,
+        settings.hyperfusion_api_key.get_secret_value(),
         provider="hyperfusion",
     )
     return ModelRouter(primary, recorder=repository)
@@ -494,13 +503,6 @@ def _compose_report(
         reused_semantic_runs=reused_semantic_runs,
         reused_candidate_runs=reused_candidate_runs,
     )
-
-
-def _required_environment(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise ProcessCaseError(f"{name} is required")
-    return value
 
 
 def _repository_root() -> Path:
