@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -179,7 +180,7 @@ class CandidateProposer:
         self.disposition = None
 
     async def propose(self, case_id, evidence, disposition, created_at):
-        assert len(self.repository.evidence) == 1
+        assert self.repository.evidence
         self.events.append("candidates")
         self.disposition = disposition
         return (
@@ -261,6 +262,67 @@ async def test_link_only_item_with_existing_source_fails_closed(tmp_path: Path) 
 
     with pytest.raises(ProcessCaseError, match="rights-skipped item already has stored source"):
         await service.process_case("CEN22FA375", curated_manifest(), downloads)
+
+
+@pytest.mark.asyncio
+async def test_semantic_processing_is_bounded_to_four_and_reports_progress(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    (downloads / "01.txt").write_bytes(b"source 1")
+    repository = Repository()
+    progress: list[tuple[int, int]] = []
+
+    class ManyUnits:
+        async def process_with_units(self, sources):
+            source = sources[0]
+            units = tuple(
+                StructuralUnit(
+                    derived_artifact_id=uuid4(),
+                    source_document_id=source.document.id,
+                    kind=StructuralUnitKind.TEXT_BLOCK,
+                    ordinal=index,
+                    content_checksum=hashlib.sha256(f"unit-{index}".encode()).hexdigest(),
+                    locator=TextLocator(start=0, end=len(source.data)),
+                    payload={"text": source.data.decode()},
+                )
+                for index in range(8)
+            )
+            return StructuralProcessingResult(
+                ProcessingReport(status_counts={"SUCCEEDED": 1}, artifacts=1, structural_units=8),
+                units,
+            )
+
+    class ConcurrentSemantic(SemanticInterpreter):
+        def __init__(self):
+            super().__init__([])
+            self.active = 0
+            self.max_active = 0
+
+        async def interpret(self, case_id, unit, disposition):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            await asyncio.sleep(0.01)
+            result = await super().interpret(case_id, unit, disposition)
+            self.active -= 1
+            return result
+
+    semantic = ConcurrentSemantic()
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=LocalSourceStore(tmp_path / "sources"),
+        structural_orchestrator=ManyUnits(),
+        semantic_interpreter=semantic,
+        candidate_proposer=CandidateProposer([], repository),
+        now=lambda: NOW,
+        semantic_concurrency=4,
+        on_semantic_progress=lambda done, total: progress.append((done, total)),
+    )
+
+    report = await service.process_case("CEN22FA375", curated_manifest(), downloads)
+
+    assert semantic.max_active == 4
+    assert progress[-1] == (8, 8)
+    assert report.evidence_items == 8
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import sys
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -136,13 +138,19 @@ class CaseProcessingService:
         semantic_interpreter: EvidenceInterpreter,
         candidate_proposer: EvidenceCandidateProposer,
         now: Callable[[], datetime] | None = None,
+        semantic_concurrency: int = 4,
+        on_semantic_progress: Callable[[int, int], None] | None = None,
     ) -> None:
         self._repository = repository
         self._source_store = source_store
         self._structural_orchestrator = structural_orchestrator
         self._semantic_interpreter = semantic_interpreter
+        if semantic_concurrency < 1:
+            raise ValueError("semantic_concurrency must be at least 1")
         self._candidate_proposer = candidate_proposer
         self._now = now or (lambda: datetime.now(UTC))
+        self._semantic_concurrency = semantic_concurrency
+        self._on_semantic_progress = on_semantic_progress or (lambda done, total: None)
 
     async def process_case(
         self,
@@ -238,30 +246,52 @@ class CaseProcessingService:
         new_evidence: list[EvidenceItem] = []
         model_run_ids: list[UUID] = []
         reused_semantic = 0
+        pending_units: list[StructuralUnit] = []
         for unit in structural.units:
-            disposition = source_dispositions[unit.source_document_id]
             unit_key = (unit.id,)
             if await self._repository.has_successful_model_run(case_id, "evidence", unit_key):
-                reused_semantic += 1
-                evidence.extend(await self._repository.get_evidence_items_for_unit(unit.id))
-                continue
+                existing_items = await self._repository.get_evidence_items_for_unit(unit.id)
+                if existing_items:
+                    reused_semantic += 1
+                    evidence.extend(existing_items)
+                    continue
+            pending_units.append(unit)
+
+        semaphore = asyncio.Semaphore(self._semantic_concurrency)
+        completed_units = 0
+
+        async def interpret_one(
+            unit: StructuralUnit,
+        ) -> tuple[tuple[EvidenceItem, ...], ProcessingFailure | None]:
+            nonlocal completed_units
+            disposition = source_dispositions[unit.source_document_id]
             try:
-                interpreted = await self._semantic_interpreter.interpret(
-                    case_id, unit, disposition
-                )
-            except (ModelFailure, ModelRoutingDenied, ValueError) as error:
-                failures.append(
-                    ProcessingFailure(
-                        stage="semantic",
-                        source_document_id=unit.source_document_id,
-                        structural_unit_id=unit.id,
-                        error_type=type(error).__name__,
-                        message=str(error),
-                        retryable=isinstance(error, ModelFailure),
+                async with semaphore:
+                    interpreted = await self._semantic_interpreter.interpret(
+                        case_id, unit, disposition
                     )
+                await self._repository.add_evidence_items(interpreted, self._now())
+                return interpreted, None
+            except (ModelFailure, ModelRoutingDenied, ValueError) as error:
+                return (), ProcessingFailure(
+                    stage="semantic",
+                    source_document_id=unit.source_document_id,
+                    structural_unit_id=unit.id,
+                    error_type=type(error).__name__,
+                    message=str(error),
+                    retryable=isinstance(error, ModelFailure),
                 )
+            finally:
+                completed_units += 1
+                self._on_semantic_progress(completed_units, len(pending_units))
+
+        semantic_results = await asyncio.gather(
+            *(interpret_one(unit) for unit in pending_units)
+        )
+        for interpreted, failure in semantic_results:
+            if failure is not None:
+                failures.append(failure)
                 continue
-            await self._repository.add_evidence_items(interpreted, self._now())
             evidence.extend(interpreted)
             new_evidence.extend(interpreted)
             model_run_ids.extend(
@@ -404,7 +434,7 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
     manifest = load_reference_manifest(ntsb_number)
     with httpx.Client() as storage_client:
         async with await AsyncConnection.connect(
-            settings.database_url.get_secret_value()
+            settings.database_url.get_secret_value(), autocommit=True
         ) as connection:
             source_store = SupabaseSourceStore(
                 settings.supabase_url,
@@ -438,6 +468,10 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
                 structural_orchestrator=orchestrator,
                 semantic_interpreter=SemanticInterpreter(router),
                 candidate_proposer=CandidateProposer(router),
+                semantic_concurrency=4,
+                on_semantic_progress=lambda done, total: print(
+                    f"semantic {done}/{total}", file=sys.stderr, flush=True
+                ),
             ).process_case(ntsb_number, manifest, None)
 
 
