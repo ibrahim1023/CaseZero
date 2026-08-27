@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -84,5 +84,5 @@ class CandidateProposer:
         for timeline_draft in result.output.timeline:
             if not set(timeline_draft.evidence_ids) <= allowed:
                 raise ValueError("model invented evidence id")
-            output.append(TimelineCandidate(case_id=case_id, occurred_at=timeline_draft.occurred_at, time_precision=timeline_draft.time_precision, description=timeline_draft.description, evidence_ids=timeline_draft.evidence_ids, confidence=timeline_draft.confidence, model_run_id=result.run_id, created_at=created_at))
+            output.append(TimelineCandidate(case_id=case_id, occurred_at=timeline_draft.occurred_at.astimezone(UTC) if timeline_draft.occurred_at is not None else None, time_precision=timeline_draft.time_precision, description=timeline_draft.description, evidence_ids=timeline_draft.evidence_ids, confidence=timeline_draft.confidence, model_run_id=result.run_id, created_at=created_at))
         return tuple(output)
