@@ -96,8 +96,12 @@ placeholder/TODO prose, fake data presented as real, needless dependencies,
 comments that restate code, broad exception swallowing, invented API fields, or
 generic dashboard styling. Prefer exact domain names, small focused files,
 evidence-backed behavior, and deletion of code that serves no accepted
-requirement. If a generated artifact cannot explain its consumer and test,
-remove it.
+requirement. Treat unnecessary output as a defect: before commit, every added
+file, abstraction, field, test, plan step, document, UI element, and report must
+name a concrete accepted requirement and real consumer, and must have an
+appropriate verification path. If it cannot, delete it rather than polishing
+or documenting it. Never claim completeness from mocked behavior, passing unit
+tests alone, or generated prose when the relevant real integration has not run.
 
 ## Commands
 
