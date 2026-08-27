@@ -27,6 +27,14 @@ def source(data: bytes, file_type: str) -> ProcessingSource:
     )
 
 
+def test_default_table_windows_bound_model_payload_to_fifty_rows() -> None:
+    rows = "\n".join(f"{index},{100 + index}" for index in range(120))
+    output = TableProcessor().process(
+        source(("time,altitude\n" + rows + "\n").encode(), "csv")
+    )
+    assert [len(unit.payload["rows"]) for unit in output.units] == [50, 50, 20]
+
+
 def test_csv_processor_preserves_rows_columns_and_raw_values() -> None:
     output = TableProcessor(row_group_size=2).process(source(b"time,altitude\n0,100\n1,120\n2,90\n", "csv"))
     assert len(output.units) == 2

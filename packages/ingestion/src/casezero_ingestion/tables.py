@@ -22,7 +22,7 @@ class TableProcessor:
     name = "polars-table"
     version = "1.0.0"
 
-    def __init__(self, row_group_size: int = 500) -> None:
+    def __init__(self, row_group_size: int = 50) -> None:
         self._row_group_size = row_group_size
 
     def supports(self, media_type: DetectedMediaType, document_type: DocumentType) -> bool:
