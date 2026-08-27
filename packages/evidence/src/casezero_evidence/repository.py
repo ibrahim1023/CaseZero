@@ -523,6 +523,28 @@ class EvidenceRepository:
         )
         return await cursor.fetchone() is not None
 
+    async def has_persisted_candidate_run(
+        self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
+    ) -> bool:
+        cursor = await self._connection.execute(
+            """
+            select 1
+            from public.model_runs as run
+            where run.case_id = %s
+              and run.stage = 'candidates'
+              and run.structural_unit_ids = %s
+              and run.status = 'SUCCEEDED'
+              and (
+                exists (select 1 from public.claim_candidates where model_run_id = run.id)
+                or exists (select 1 from public.entity_candidates where model_run_id = run.id)
+                or exists (select 1 from public.timeline_candidates where model_run_id = run.id)
+              )
+            limit 1
+            """,
+            (case_id, list(structural_unit_ids)),
+        )
+        return await cursor.fetchone() is not None
+
     async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]:
         if not run_ids:
             return {}

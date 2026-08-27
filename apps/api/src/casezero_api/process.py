@@ -87,6 +87,10 @@ class CaseProcessingRepository(Protocol):
         structural_unit_ids: tuple[UUID, ...],
     ) -> bool: ...
 
+    async def has_persisted_candidate_run(
+        self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
+    ) -> bool: ...
+
     async def get_evidence_items_for_unit(
         self, structural_unit_id: UUID
     ) -> tuple[EvidenceItem, ...]: ...
@@ -343,8 +347,8 @@ class CaseProcessingService:
                     if item.structural_unit_id is not None
                 )
             )
-            if await self._repository.has_successful_model_run(
-                case_id, "candidates", candidate_unit_ids
+            if await self._repository.has_persisted_candidate_run(
+                case_id, candidate_unit_ids
             ):
                 reused_candidates += 1
             else:

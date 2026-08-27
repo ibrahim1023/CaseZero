@@ -98,6 +98,14 @@ class Repository:
     ) -> bool:
         return (stage, structural_unit_ids) in self.successful_model_runs
 
+    async def has_persisted_candidate_run(
+        self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
+    ) -> bool:
+        return (
+            ("candidates", structural_unit_ids) in self.successful_model_runs
+            and bool(self.candidates)
+        )
+
     async def get_evidence_items_for_unit(self, unit_id: UUID) -> tuple[EvidenceItem, ...]:
         return self.evidence.get(unit_id, ())
 
@@ -342,6 +350,56 @@ async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path
     assert sorted(candidates.batch_sizes) == [2, 2, 2, 2]
     assert progress[-1] == (8, 8)
     assert report.evidence_items == 8
+
+
+@pytest.mark.asyncio
+async def test_candidate_batch_without_persisted_candidates_is_retried(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    (downloads / "01.txt").write_bytes(b"source 1")
+    repository = Repository()
+    unit_id = uuid4()
+
+    class FixedUnit:
+        async def process_with_units(self, sources):
+            source = sources[0]
+            unit = StructuralUnit(
+                id=unit_id,
+                derived_artifact_id=uuid4(),
+                source_document_id=source.document.id,
+                kind=StructuralUnitKind.TEXT_BLOCK,
+                ordinal=0,
+                content_checksum=hashlib.sha256(source.data).hexdigest(),
+                locator=TextLocator(start=0, end=len(source.data)),
+                payload={"text": source.data.decode()},
+            )
+            return StructuralProcessingResult(
+                ProcessingReport(status_counts={"SUCCEEDED": 1}, artifacts=1, structural_units=1),
+                (unit,),
+            )
+
+    class CountingCandidates:
+        def __init__(self):
+            self.calls = 0
+
+        async def propose(self, case_id, evidence, disposition, created_at):
+            self.calls += 1
+            return ()
+
+    candidates = CountingCandidates()
+    repository.successful_model_runs.add(("candidates", (unit_id,)))
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=LocalSourceStore(tmp_path / "sources"),
+        structural_orchestrator=FixedUnit(),
+        semantic_interpreter=SemanticInterpreter([]),
+        candidate_proposer=candidates,
+        now=lambda: NOW,
+    )
+
+    await service.process_case("CEN22FA375", curated_manifest(), downloads)
+
+    assert candidates.calls == 1
 
 
 @pytest.mark.asyncio
