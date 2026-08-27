@@ -108,6 +108,9 @@ tests alone, or generated prose when the relevant real integration has not run.
 Use `uv run` for Python tools. Use exact test paths while iterating, then run
 the full offline gate (`uv run pytest`). Live acquisition/investigation checks
 require opt-in flags (see `docs/testing.md`) and must never run in ordinary CI.
+Stop background commands, watchers, browser previews, and database sessions as
+soon as they are no longer in use. After interruption or failure, verify that
+no stale process or open transaction remains before retrying.
 
 ## Key docs
 
