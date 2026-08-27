@@ -128,6 +128,30 @@ class EvidenceCandidateProposer(Protocol):
     ) -> tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]: ...
 
 
+def _candidate_batches(
+    evidence: tuple[EvidenceItem, ...], max_items: int
+) -> tuple[tuple[EvidenceItem, ...], ...]:
+    groups: list[list[EvidenceItem]] = []
+    group_keys: dict[UUID, int] = {}
+    for item in evidence:
+        key = item.structural_unit_id or item.id
+        if key not in group_keys:
+            group_keys[key] = len(groups)
+            groups.append([])
+        groups[group_keys[key]].append(item)
+
+    batches: list[tuple[EvidenceItem, ...]] = []
+    current: list[EvidenceItem] = []
+    for group in groups:
+        if current and len(current) + len(group) > max_items:
+            batches.append(tuple(current))
+            current = []
+        current.extend(group)
+    if current:
+        batches.append(tuple(current))
+    return tuple(batches)
+
+
 class CaseProcessingService:
     def __init__(
         self,
@@ -139,18 +163,26 @@ class CaseProcessingService:
         candidate_proposer: EvidenceCandidateProposer,
         now: Callable[[], datetime] | None = None,
         semantic_concurrency: int = 4,
+        candidate_concurrency: int = 4,
+        candidate_batch_size: int = 100,
         on_semantic_progress: Callable[[int, int], None] | None = None,
+        on_candidate_progress: Callable[[int, int], None] | None = None,
     ) -> None:
         self._repository = repository
         self._source_store = source_store
         self._structural_orchestrator = structural_orchestrator
         self._semantic_interpreter = semantic_interpreter
-        if semantic_concurrency < 1:
-            raise ValueError("semantic_concurrency must be at least 1")
+        if semantic_concurrency < 1 or candidate_concurrency < 1:
+            raise ValueError("model concurrency must be at least 1")
+        if candidate_batch_size < 1:
+            raise ValueError("candidate_batch_size must be at least 1")
         self._candidate_proposer = candidate_proposer
         self._now = now or (lambda: datetime.now(UTC))
         self._semantic_concurrency = semantic_concurrency
+        self._candidate_concurrency = candidate_concurrency
+        self._candidate_batch_size = candidate_batch_size
         self._on_semantic_progress = on_semantic_progress or (lambda done, total: None)
+        self._on_candidate_progress = on_candidate_progress or (lambda done, total: None)
 
     async def process_case(
         self,
@@ -298,51 +330,74 @@ class CaseProcessingService:
                 item.model_run_id for item in interpreted if item.model_run_id is not None
             )
 
-        new_candidates: tuple[
-            ClaimCandidate | EntityCandidate | TimelineCandidate, ...
-        ] = ()
+        new_candidates: list[
+            ClaimCandidate | EntityCandidate | TimelineCandidate
+        ] = []
         reused_candidates = 0
-        candidate_unit_ids = tuple(
-            dict.fromkeys(
-                item.structural_unit_id
-                for item in evidence
-                if item.structural_unit_id is not None
+        pending_candidate_batches: list[tuple[EvidenceItem, ...]] = []
+        for batch in _candidate_batches(tuple(evidence), self._candidate_batch_size):
+            candidate_unit_ids = tuple(
+                dict.fromkeys(
+                    item.structural_unit_id
+                    for item in batch
+                    if item.structural_unit_id is not None
+                )
             )
-        )
-        if evidence:
             if await self._repository.has_successful_model_run(
                 case_id, "candidates", candidate_unit_ids
             ):
-                reused_candidates = 1
+                reused_candidates += 1
             else:
-                candidate_disposition = (
-                    ProcessingDisposition.LOCAL_ONLY
-                    if any(
-                        source_dispositions[item.source_document_id]
-                        is ProcessingDisposition.LOCAL_ONLY
-                        for item in evidence
-                    )
-                    else ProcessingDisposition.AI_ALLOWED
+                pending_candidate_batches.append(batch)
+
+        candidate_semaphore = asyncio.Semaphore(self._candidate_concurrency)
+        completed_candidate_batches = 0
+
+        async def propose_batch(
+            batch: tuple[EvidenceItem, ...],
+        ) -> tuple[
+            tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
+            ProcessingFailure | None,
+        ]:
+            nonlocal completed_candidate_batches
+            disposition = (
+                ProcessingDisposition.LOCAL_ONLY
+                if any(
+                    source_dispositions[item.source_document_id]
+                    is ProcessingDisposition.LOCAL_ONLY
+                    for item in batch
                 )
-                try:
-                    new_candidates = await self._candidate_proposer.propose(
-                        case_id,
-                        tuple(evidence),
-                        candidate_disposition,
-                        self._now(),
+                else ProcessingDisposition.AI_ALLOWED
+            )
+            try:
+                async with candidate_semaphore:
+                    proposed = await self._candidate_proposer.propose(
+                        case_id, batch, disposition, self._now()
                     )
-                except (ModelFailure, ModelRoutingDenied, ValueError) as error:
-                    failures.append(
-                        ProcessingFailure(
-                            stage="candidates",
-                            error_type=type(error).__name__,
-                            message=str(error),
-                            retryable=isinstance(error, ModelFailure),
-                        )
-                    )
-                else:
-                    await self._repository.add_candidates(new_candidates)
-                    model_run_ids.extend(candidate.model_run_id for candidate in new_candidates)
+                await self._repository.add_candidates(proposed)
+                return proposed, None
+            except (ModelFailure, ModelRoutingDenied, ValueError) as error:
+                return (), ProcessingFailure(
+                    stage="candidates",
+                    error_type=type(error).__name__,
+                    message=str(error),
+                    retryable=isinstance(error, ModelFailure),
+                )
+            finally:
+                completed_candidate_batches += 1
+                self._on_candidate_progress(
+                    completed_candidate_batches, len(pending_candidate_batches)
+                )
+
+        candidate_results = await asyncio.gather(
+            *(propose_batch(batch) for batch in pending_candidate_batches)
+        )
+        for proposed, failure in candidate_results:
+            if failure is not None:
+                failures.append(failure)
+                continue
+            new_candidates.extend(proposed)
+            model_run_ids.extend(candidate.model_run_id for candidate in proposed)
 
         model_usage = await self._repository.get_model_usage(tuple(model_run_ids))
         return _compose_report(
@@ -471,6 +526,9 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
                 semantic_concurrency=4,
                 on_semantic_progress=lambda done, total: print(
                     f"semantic {done}/{total}", file=sys.stderr, flush=True
+                ),
+                on_candidate_progress=lambda done, total: print(
+                    f"candidates {done}/{total}", file=sys.stderr, flush=True
                 ),
             ).process_case(ntsb_number, manifest, None)
 

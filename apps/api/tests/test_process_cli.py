@@ -265,7 +265,7 @@ async def test_link_only_item_with_existing_source_fails_closed(tmp_path: Path) 
 
 
 @pytest.mark.asyncio
-async def test_semantic_processing_is_bounded_to_four_and_reports_progress(tmp_path: Path) -> None:
+async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path: Path) -> None:
     downloads = tmp_path / "downloads"
     downloads.mkdir()
     (downloads / "01.txt").write_bytes(b"source 1")
@@ -306,21 +306,40 @@ async def test_semantic_processing_is_bounded_to_four_and_reports_progress(tmp_p
             self.active -= 1
             return result
 
+    class ConcurrentCandidates:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+            self.batch_sizes: list[int] = []
+
+        async def propose(self, case_id, evidence, disposition, created_at):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            self.batch_sizes.append(len(evidence))
+            await asyncio.sleep(0.01)
+            self.active -= 1
+            return ()
+
     semantic = ConcurrentSemantic()
+    candidates = ConcurrentCandidates()
     service = CaseProcessingService(
         repository=repository,
         source_store=LocalSourceStore(tmp_path / "sources"),
         structural_orchestrator=ManyUnits(),
         semantic_interpreter=semantic,
-        candidate_proposer=CandidateProposer([], repository),
+        candidate_proposer=candidates,
         now=lambda: NOW,
         semantic_concurrency=4,
+        candidate_concurrency=4,
+        candidate_batch_size=2,
         on_semantic_progress=lambda done, total: progress.append((done, total)),
     )
 
     report = await service.process_case("CEN22FA375", curated_manifest(), downloads)
 
     assert semantic.max_active == 4
+    assert candidates.max_active == 4
+    assert sorted(candidates.batch_sizes) == [2, 2, 2, 2]
     assert progress[-1] == (8, 8)
     assert report.evidence_items == 8
 
