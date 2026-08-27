@@ -36,7 +36,7 @@ class _SupabaseStorage:
             "x-upsert": "false",
         }
         response = self._client.post(url, headers=headers, content=data, timeout=120)
-        if response.status_code != 409:
+        if response.status_code not in {400, 409}:
             response.raise_for_status()
         fetched = self._client.get(
             url,

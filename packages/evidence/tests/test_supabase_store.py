@@ -33,9 +33,10 @@ def test_source_upload_is_private_content_addressed_and_verified() -> None:
     assert stored.storage_path == Path("sources") / SHA[:2] / SHA
 
 
+@pytest.mark.parametrize("duplicate_status", [400, 409])
 @respx.mock
-def test_existing_matching_object_is_idempotent() -> None:
-    respx.post(OBJECT_URL).mock(return_value=httpx.Response(409))
+def test_existing_matching_object_is_idempotent(duplicate_status: int) -> None:
+    respx.post(OBJECT_URL).mock(return_value=httpx.Response(duplicate_status))
     respx.get(OBJECT_URL).mock(return_value=httpx.Response(200, content=DATA))
     with httpx.Client() as client:
         stored = SupabaseSourceStore(URL, KEY, BUCKET, client=client).put(
