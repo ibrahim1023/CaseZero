@@ -13,6 +13,10 @@ from casezero_evidence import (
 from casezero_observability import ReasoningRequest, ReasoningResult
 from pydantic import BaseModel, ConfigDict, Field
 
+EVIDENCE_PROMPT_TEMPLATE = (
+    "casezero.evidence.v1: Extract only directly supported observations. Do not invent ids."
+)
+
 
 class EvidenceObservation(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -39,11 +43,12 @@ class SemanticInterpreter:
     async def interpret(self, case_id: UUID, unit: StructuralUnit, disposition: ProcessingDisposition) -> tuple[EvidenceItem, ...]:
         if disposition in {ProcessingDisposition.LINK_ONLY, ProcessingDisposition.EXCLUDED}:
             raise PermissionError(f"semantic processing denied for {disposition.value}")
-        prompt = json.dumps({"instruction":"Extract only directly supported observations. Do not invent ids.","allowed_structural_unit_id":str(unit.id),"allowed_source_document_id":str(unit.source_document_id),"locator":unit.locator.model_dump(mode="json"),"payload":unit.payload}, sort_keys=True)
+        prompt = json.dumps({"instruction":EVIDENCE_PROMPT_TEMPLATE,"allowed_structural_unit_id":str(unit.id),"allowed_source_document_id":str(unit.source_document_id),"locator":unit.locator.model_dump(mode="json"),"payload":unit.payload}, sort_keys=True)
         result = await self._router.generate(
             ReasoningRequest(
                 stage="evidence",
                 prompt=prompt,
+                prompt_template=EVIDENCE_PROMPT_TEMPLATE,
                 output_type=EvidenceBatch,
                 case_id=case_id,
                 structural_unit_ids=(unit.id,),

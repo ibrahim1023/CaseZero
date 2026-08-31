@@ -15,6 +15,10 @@ from casezero_evidence import (
 from casezero_observability import ReasoningRequest, ReasoningResult
 from pydantic import BaseModel, Field, field_validator
 
+CANDIDATE_PROMPT_TEMPLATE = (
+    "casezero.candidates.v1: Propose only candidates supported by the supplied evidence ids."
+)
+
 
 class ClaimDraft(BaseModel):
     text: str
@@ -67,7 +71,11 @@ class CandidateProposer:
         payload = [{"id": str(item.id), "observation": item.observation, "type": item.type.value, "confidence": item.confidence} for item in evidence]
         request = ReasoningRequest(
             stage="candidates",
-            prompt=json.dumps(payload, sort_keys=True),
+            prompt=json.dumps(
+                {"instruction": CANDIDATE_PROMPT_TEMPLATE, "evidence": payload},
+                sort_keys=True,
+            ),
+            prompt_template=CANDIDATE_PROMPT_TEMPLATE,
             output_type=CandidateSet,
             case_id=case_id,
             structural_unit_ids=tuple(

@@ -24,13 +24,14 @@ class ModelRoutingDenied(PermissionError):
 class ReasoningRequest[OutputT: BaseModel]:
     stage: str
     prompt: str
+    prompt_template: str
     output_type: type[OutputT]
     case_id: UUID | None = None
     structural_unit_ids: tuple[UUID, ...] = ()
 
     @property
     def prompt_hash(self) -> str:
-        return hashlib.sha256(self.prompt.encode()).hexdigest()
+        return hashlib.sha256(self.prompt_template.encode()).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

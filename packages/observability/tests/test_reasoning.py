@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -44,11 +45,23 @@ class Recorder:
         self.runs.append(values)
 
 
+def test_prompt_hash_uses_versioned_template_not_source_payload() -> None:
+    request = ReasoningRequest(
+        stage="evidence",
+        prompt="private source payload",
+        prompt_template="casezero.evidence.v1",
+        output_type=Output,
+    )
+
+    assert request.prompt_hash == hashlib.sha256(b"casezero.evidence.v1").hexdigest()
+    assert request.prompt_hash != hashlib.sha256(request.prompt.encode()).hexdigest()
+
+
 @pytest.mark.asyncio
 async def test_ai_allowed_uses_hyperfusion() -> None:
     model = FakeModel("hyperfusion")
     result = await ModelRouter(model).generate(
-        ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output),
+        ReasoningRequest(stage="evidence", prompt="bounded", prompt_template="test.v1", output_type=Output),
         ProcessingDisposition.AI_ALLOWED,
     )
     assert result.output.value == "hyperfusion"
@@ -64,7 +77,7 @@ async def test_non_ai_allowed_never_calls_model(disposition: ProcessingDispositi
     model = FakeModel("hyperfusion")
     with pytest.raises(ModelRoutingDenied, match=disposition.value):
         await ModelRouter(model).generate(
-            ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output), disposition
+            ReasoningRequest(stage="evidence", prompt="bounded", prompt_template="test.v1", output_type=Output), disposition
         )
     assert model.calls == 0
 
@@ -79,6 +92,7 @@ async def test_successful_run_records_provider_usage() -> None:
         ReasoningRequest(
             stage="evidence",
             prompt="bounded",
+            prompt_template="test.v1",
             output_type=Output,
             case_id=case_id,
         ),
@@ -96,7 +110,7 @@ async def test_failed_hyperfusion_run_is_recorded_without_provider_fallback() ->
     recorder = Recorder()
     router = ModelRouter(FakeModel("hyperfusion", fail=True), recorder=recorder)
     request = ReasoningRequest(
-        stage="evidence", prompt="bounded", output_type=Output, case_id=case_id
+        stage="evidence", prompt="bounded", prompt_template="test.v1", output_type=Output, case_id=case_id
     )
     with pytest.raises(ModelFailure):
         await router.generate(request, ProcessingDisposition.AI_ALLOWED)
