@@ -75,6 +75,8 @@ class Repository:
         self.successful_model_runs: set[tuple[str, tuple[UUID, ...]]] = set()
         self.semantic_completions: set[UUID] = set()
         self.direct_evidence_writes = 0
+        self.direct_evidence_reads = 0
+        self.completed_evidence_reads = 0
         self.semantic_result_writes = 0
         self.direct_candidate_writes = 0
         self.candidate_batch_writes = 0
@@ -151,6 +153,13 @@ class Repository:
         )
 
     async def get_evidence_items_for_unit(self, unit_id: UUID) -> tuple[EvidenceItem, ...]:
+        self.direct_evidence_reads += 1
+        return self.evidence.get(unit_id, ())
+
+    async def get_completed_evidence_items(
+        self, unit_id: UUID, prompt_hash: str
+    ) -> tuple[EvidenceItem, ...]:
+        self.completed_evidence_reads += 1
         return self.evidence.get(unit_id, ())
 
     async def add_evidence_items(
@@ -493,6 +502,8 @@ async def test_empty_semantic_result_is_checkpointed_and_reused(tmp_path: Path) 
     await service.process_case("CEN22FA375", curated_manifest(), downloads)
 
     assert semantic.calls == 1
+    assert repository.completed_evidence_reads == 1
+    assert repository.direct_evidence_reads == 0
 
 
 @pytest.mark.asyncio

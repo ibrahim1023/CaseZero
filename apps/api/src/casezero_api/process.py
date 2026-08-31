@@ -122,6 +122,10 @@ class CaseProcessingRepository(Protocol):
         self, structural_unit_id: UUID
     ) -> tuple[EvidenceItem, ...]: ...
 
+    async def get_completed_evidence_items(
+        self, structural_unit_id: UUID, prompt_hash: str
+    ) -> tuple[EvidenceItem, ...]: ...
+
     async def add_evidence_items(
         self, items: tuple[EvidenceItem, ...], created_at: datetime
     ) -> None: ...
@@ -335,7 +339,11 @@ class CaseProcessingService:
                 unit.id, EVIDENCE_PROMPT_HASH
             ):
                 reused_semantic += 1
-                evidence.extend(await self._repository.get_evidence_items_for_unit(unit.id))
+                evidence.extend(
+                    await self._repository.get_completed_evidence_items(
+                        unit.id, EVIDENCE_PROMPT_HASH
+                    )
+                )
                 continue
             pending_units.append(unit)
 

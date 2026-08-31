@@ -144,7 +144,11 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
         assert not await repository.has_completed_semantic_unit(unit.id, "e" * 64)
         await repository.persist_semantic_result(unit.id, (evidence,), "e" * 64, NOW)
         assert await repository.has_completed_semantic_unit(unit.id, "e" * 64)
+        assert await repository.get_completed_evidence_items(unit.id, "e" * 64) == (
+            evidence,
+        )
         assert not await repository.has_completed_semantic_unit(unit.id, "f" * 64)
+        assert await repository.get_completed_evidence_items(unit.id, "f" * 64) == ()
         candidate = ClaimCandidate(
             case_id=case_id,
             text="Visible source text was reported.",

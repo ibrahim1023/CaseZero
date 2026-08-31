@@ -459,6 +459,25 @@ class EvidenceRepository:
         rows = await cursor.fetchall()
         return tuple(EvidenceItem.model_validate(row[0], strict=False) for row in rows)
 
+    async def get_completed_evidence_items(
+        self, structural_unit_id: UUID, prompt_hash: str
+    ) -> tuple[EvidenceItem, ...]:
+        cursor = await self._connection.execute(
+            """
+            select evidence.item
+            from public.semantic_unit_completions completion
+            join public.model_runs run on run.id = completion.model_run_id
+            join public.evidence_items evidence
+              on evidence.structural_unit_id = completion.structural_unit_id
+             and evidence.model_run_id = completion.model_run_id
+            where completion.structural_unit_id = %s and run.prompt_hash = %s
+            order by evidence.created_at, evidence.id
+            """,
+            (structural_unit_id, prompt_hash),
+        )
+        rows = await cursor.fetchall()
+        return tuple(EvidenceItem.model_validate(row[0], strict=False) for row in rows)
+
     async def record_model_run(
         self,
         *,
