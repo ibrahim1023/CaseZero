@@ -13,7 +13,7 @@ from casezero_evidence import (
     TimePrecision,
 )
 from casezero_observability import ReasoningRequest, ReasoningResult
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ClaimDraft(BaseModel):
@@ -38,6 +38,14 @@ class TimelineDraft(BaseModel):
     description: str
     evidence_ids: tuple[UUID,...]
     confidence: float=Field(ge=0,le=1)
+
+
+    @field_validator("occurred_at")
+    @classmethod
+    def normalize_utc(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("datetime must be UTC-aware")
+        return value.astimezone(UTC) if value is not None else None
 
 
 class CandidateSet(BaseModel):

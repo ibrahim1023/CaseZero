@@ -64,6 +64,17 @@ async def test_candidate_proposer_normalizes_aware_timeline_to_utc() -> None:
     assert result[0].occurred_at == datetime(2022, 8, 18, 19, tzinfo=UTC)
 
 
+def test_timeline_draft_rejects_naive_datetime() -> None:
+    with pytest.raises(ValueError, match="UTC-aware"):
+        TimelineDraft(
+            occurred_at=datetime(2022, 8, 18, 12, tzinfo=UTC).replace(tzinfo=None),
+            time_precision=TimePrecision.EXACT,
+            description="Recorded event",
+            evidence_ids=(uuid4(),),
+            confidence=0.8,
+        )
+
+
 @pytest.mark.asyncio
 async def test_candidate_proposer_rejects_invented_evidence() -> None:
     with pytest.raises(ValueError,match="invented"):
