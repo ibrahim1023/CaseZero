@@ -87,6 +87,12 @@ class CaseProcessingRepository(Protocol):
         structural_unit_ids: tuple[UUID, ...],
     ) -> bool: ...
 
+    async def has_completed_semantic_unit(self, structural_unit_id: UUID) -> bool: ...
+
+    async def complete_semantic_unit(
+        self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
+    ) -> None: ...
+
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
     ) -> bool: ...
@@ -284,10 +290,17 @@ class CaseProcessingService:
         reused_semantic = 0
         pending_units: list[StructuralUnit] = []
         for unit in structural.units:
+            if await self._repository.has_completed_semantic_unit(unit.id):
+                reused_semantic += 1
+                evidence.extend(await self._repository.get_evidence_items_for_unit(unit.id))
+                continue
             unit_key = (unit.id,)
             if await self._repository.has_successful_model_run(case_id, "evidence", unit_key):
                 existing_items = await self._repository.get_evidence_items_for_unit(unit.id)
                 if existing_items:
+                    await self._repository.complete_semantic_unit(
+                        unit.id, len(existing_items), self._now()
+                    )
                     reused_semantic += 1
                     evidence.extend(existing_items)
                     continue
@@ -306,7 +319,11 @@ class CaseProcessingService:
                     interpreted = await self._semantic_interpreter.interpret(
                         case_id, unit, disposition
                     )
-                await self._repository.add_evidence_items(interpreted, self._now())
+                completed_at = self._now()
+                await self._repository.add_evidence_items(interpreted, completed_at)
+                await self._repository.complete_semantic_unit(
+                    unit.id, len(interpreted), completed_at
+                )
                 return interpreted, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
                 return (), ProcessingFailure(

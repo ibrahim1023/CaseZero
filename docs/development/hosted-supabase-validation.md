@@ -23,7 +23,9 @@ that `source_blobs` lacked forced RLS, so migration 0005 enabled/forced RLS and
 revoked anon/authenticated privileges. A second dry run listed only 0005 before
 it was applied. A later live access audit found Supabase's default table grants;
 migration 0006 revoked table, sequence, and function access from public client
-roles and hardened matching default privileges.
+roles and hardened matching default privileges. Migration 0007 added explicit
+semantic-unit completion checkpoints so valid zero-observation results are
+idempotent without fabricating evidence.
 
 Applied migrations:
 
@@ -34,6 +36,7 @@ Applied migrations:
 0004_hosted_environment_and_buckets.sql
 0005_source_blob_rls.sql
 0006_revoke_public_access.sql
+0007_semantic_unit_completions.sql
 ```
 
 ## Hosted verification

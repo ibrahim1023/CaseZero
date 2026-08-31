@@ -124,11 +124,11 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
         await connection.execute(
             """
             insert into public.model_runs (
-              id, case_id, stage, provider, model, prompt_hash, latency_ms,
-              retry_count, schema_failure_count, status, created_at
-            ) values (%s, %s, 'evidence', 'test', 'test', %s, 1, 0, 0, 'SUCCEEDED', %s)
+              id, case_id, stage, provider, model, prompt_hash, structural_unit_ids,
+              latency_ms, retry_count, schema_failure_count, status, created_at
+            ) values (%s, %s, 'evidence', 'test', 'test', %s, %s, 1, 0, 0, 'SUCCEEDED', %s)
             """,
-            (model_run_id, case_id, "e" * 64, NOW),
+            (model_run_id, case_id, "e" * 64, [unit.id], NOW),
         )
         evidence = EvidenceItem(
             case_id=case_id,
@@ -142,6 +142,9 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
             confidence=0.9,
         )
         await repository.add_evidence_items((evidence,), NOW)
+        assert not await repository.has_completed_semantic_unit(unit.id)
+        await repository.complete_semantic_unit(unit.id, 1, NOW)
+        assert await repository.has_completed_semantic_unit(unit.id)
         candidate = ClaimCandidate(
             case_id=case_id,
             text="Visible source text was reported.",

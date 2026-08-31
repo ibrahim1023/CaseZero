@@ -9,6 +9,7 @@ EXPECTED_TABLES = {
     "structural_units",
     "evidence_items",
     "model_runs",
+    "semantic_unit_completions",
 }
 EXPECTED_BUCKETS = {"casezero-sources", "casezero-derived"}
 

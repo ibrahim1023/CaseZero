@@ -523,6 +523,34 @@ class EvidenceRepository:
         )
         return await cursor.fetchone() is not None
 
+    async def has_completed_semantic_unit(self, structural_unit_id: UUID) -> bool:
+        cursor = await self._connection.execute(
+            "select 1 from public.semantic_unit_completions where structural_unit_id = %s",
+            (structural_unit_id,),
+        )
+        return await cursor.fetchone() is not None
+
+    async def complete_semantic_unit(
+        self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
+    ) -> None:
+        await self._connection.execute(
+            """
+            insert into public.semantic_unit_completions (
+              structural_unit_id, model_run_id, evidence_count, completed_at
+            )
+            select %s, id, %s, %s
+            from public.model_runs
+            where stage = 'evidence' and structural_unit_ids = %s and status = 'SUCCEEDED'
+            order by created_at desc
+            limit 1
+            on conflict (structural_unit_id) do update set
+              model_run_id = excluded.model_run_id,
+              evidence_count = excluded.evidence_count,
+              completed_at = excluded.completed_at
+            """,
+            (structural_unit_id, evidence_count, completed_at, [structural_unit_id]),
+        )
+
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
     ) -> bool:

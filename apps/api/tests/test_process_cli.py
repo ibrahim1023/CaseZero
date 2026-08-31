@@ -70,6 +70,7 @@ class Repository:
         self.evidence: dict[UUID, tuple[EvidenceItem, ...]] = {}
         self.candidates = []
         self.successful_model_runs: set[tuple[str, tuple[UUID, ...]]] = set()
+        self.semantic_completions: set[UUID] = set()
         self.skips: list[tuple[UUID, str]] = []
         self.existing_sources: dict[str, object] = {}
 
@@ -97,6 +98,14 @@ class Repository:
         self, case_id: UUID, stage: str, structural_unit_ids: tuple[UUID, ...]
     ) -> bool:
         return (stage, structural_unit_ids) in self.successful_model_runs
+
+    async def has_completed_semantic_unit(self, structural_unit_id: UUID) -> bool:
+        return structural_unit_id in self.semantic_completions
+
+    async def complete_semantic_unit(
+        self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
+    ) -> None:
+        self.semantic_completions.add(structural_unit_id)
 
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
@@ -350,6 +359,56 @@ async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path
     assert sorted(candidates.batch_sizes) == [2, 2, 2, 2]
     assert progress[-1] == (8, 8)
     assert report.evidence_items == 8
+
+
+@pytest.mark.asyncio
+async def test_empty_semantic_result_is_checkpointed_and_reused(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    (downloads / "01.txt").write_bytes(b"source 1")
+    repository = Repository()
+    unit_id = uuid4()
+
+    class FixedUnit:
+        async def process_with_units(self, sources):
+            source = sources[0]
+            unit = StructuralUnit(
+                id=unit_id,
+                derived_artifact_id=uuid4(),
+                source_document_id=source.document.id,
+                kind=StructuralUnitKind.TEXT_BLOCK,
+                ordinal=0,
+                content_checksum=hashlib.sha256(source.data).hexdigest(),
+                locator=TextLocator(start=0, end=len(source.data)),
+                payload={"text": source.data.decode()},
+            )
+            return StructuralProcessingResult(
+                ProcessingReport(status_counts={"SUCCEEDED": 1}, artifacts=1, structural_units=1),
+                (unit,),
+            )
+
+    class EmptySemantic:
+        def __init__(self):
+            self.calls = 0
+
+        async def interpret(self, case_id, unit, disposition):
+            self.calls += 1
+            return ()
+
+    semantic = EmptySemantic()
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=LocalSourceStore(tmp_path / "sources"),
+        structural_orchestrator=FixedUnit(),
+        semantic_interpreter=semantic,
+        candidate_proposer=CandidateProposer([], repository),
+        now=lambda: NOW,
+    )
+
+    await service.process_case("CEN22FA375", curated_manifest(), downloads)
+    await service.process_case("CEN22FA375", curated_manifest(), downloads)
+
+    assert semantic.calls == 1
 
 
 @pytest.mark.asyncio
