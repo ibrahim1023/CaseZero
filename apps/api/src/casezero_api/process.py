@@ -26,7 +26,7 @@ from casezero_evidence import (
 from casezero_evidence.repository import EvidenceRepository, StoredSourceRecord
 from casezero_evidence.source_store import SourceStore, StoreIntegrityError
 from casezero_evidence.supabase_store import SupabaseArtifactStore, SupabaseSourceStore
-from casezero_ingestion.candidates import CandidateProposer
+from casezero_ingestion.candidates import CANDIDATE_PROMPT_TEMPLATE, CandidateProposer
 from casezero_ingestion.images import ImageProcessor
 from casezero_ingestion.orchestrator import (
     ProcessingOrchestrator,
@@ -35,7 +35,7 @@ from casezero_ingestion.orchestrator import (
 from casezero_ingestion.pdf import DoclingPdfAdapter, PdfProcessor
 from casezero_ingestion.registry import ProcessorRegistry
 from casezero_ingestion.report import ProcessingFailure, ProcessingReport
-from casezero_ingestion.semantic import SemanticInterpreter
+from casezero_ingestion.semantic import EVIDENCE_PROMPT_TEMPLATE, SemanticInterpreter
 from casezero_ingestion.tables import TableProcessor
 from casezero_ingestion.text import TextProcessor
 from casezero_ntsb.curation import (
@@ -54,6 +54,9 @@ from casezero_observability import (
 from psycopg import AsyncConnection
 
 from casezero_api.settings import HostedSettings
+
+EVIDENCE_PROMPT_HASH = hashlib.sha256(EVIDENCE_PROMPT_TEMPLATE.encode()).hexdigest()
+CANDIDATE_PROMPT_HASH = hashlib.sha256(CANDIDATE_PROMPT_TEMPLATE.encode()).hexdigest()
 
 
 class ProcessCaseError(RuntimeError):
@@ -88,21 +91,31 @@ class CaseProcessingRepository(Protocol):
         structural_unit_ids: tuple[UUID, ...],
     ) -> bool: ...
 
-    async def has_completed_semantic_unit(self, structural_unit_id: UUID) -> bool: ...
+    async def has_completed_semantic_unit(
+        self, structural_unit_id: UUID, prompt_hash: str
+    ) -> bool: ...
 
     async def complete_semantic_unit(
-        self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
+        self,
+        structural_unit_id: UUID,
+        evidence_count: int,
+        prompt_hash: str,
+        completed_at: datetime,
     ) -> None: ...
 
     async def persist_semantic_result(
         self,
         structural_unit_id: UUID,
         items: tuple[EvidenceItem, ...],
+        prompt_hash: str,
         completed_at: datetime,
     ) -> None: ...
 
     async def has_persisted_candidate_run(
-        self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
+        self,
+        case_id: UUID,
+        structural_unit_ids: tuple[UUID, ...],
+        prompt_hash: str,
     ) -> bool: ...
 
     async def get_evidence_items_for_unit(
@@ -318,20 +331,12 @@ class CaseProcessingService:
         reused_semantic = 0
         pending_units: list[StructuralUnit] = []
         for unit in structural.units:
-            if await self._repository.has_completed_semantic_unit(unit.id):
+            if await self._repository.has_completed_semantic_unit(
+                unit.id, EVIDENCE_PROMPT_HASH
+            ):
                 reused_semantic += 1
                 evidence.extend(await self._repository.get_evidence_items_for_unit(unit.id))
                 continue
-            unit_key = (unit.id,)
-            if await self._repository.has_successful_model_run(case_id, "evidence", unit_key):
-                existing_items = await self._repository.get_evidence_items_for_unit(unit.id)
-                if existing_items:
-                    await self._repository.complete_semantic_unit(
-                        unit.id, len(existing_items), self._now()
-                    )
-                    reused_semantic += 1
-                    evidence.extend(existing_items)
-                    continue
             pending_units.append(unit)
 
         semaphore = asyncio.Semaphore(self._semantic_concurrency)
@@ -349,7 +354,7 @@ class CaseProcessingService:
                     )
                 completed_at = self._now()
                 await self._repository.persist_semantic_result(
-                    unit.id, interpreted, completed_at
+                    unit.id, interpreted, EVIDENCE_PROMPT_HASH, completed_at
                 )
                 return interpreted, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
@@ -392,7 +397,7 @@ class CaseProcessingService:
                 )
             )
             if await self._repository.has_persisted_candidate_run(
-                case_id, candidate_unit_ids
+                case_id, candidate_unit_ids, CANDIDATE_PROMPT_HASH
             ):
                 reused_candidates += 1
             else:

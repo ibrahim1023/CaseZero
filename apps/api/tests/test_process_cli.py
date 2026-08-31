@@ -20,8 +20,10 @@ from casezero_evidence import (
     TextLocator,
 )
 from casezero_evidence.source_store import LocalSourceStore
+from casezero_ingestion.candidates import CANDIDATE_PROMPT_TEMPLATE
 from casezero_ingestion.orchestrator import StructuralProcessingResult
 from casezero_ingestion.report import ProcessingFailure, ProcessingReport
+from casezero_ingestion.semantic import EVIDENCE_PROMPT_TEMPLATE
 from casezero_ntsb.curation import CuratedCaseManifest
 from typer.testing import CliRunner
 
@@ -76,6 +78,8 @@ class Repository:
         self.semantic_result_writes = 0
         self.direct_candidate_writes = 0
         self.candidate_batch_writes = 0
+        self.semantic_completion_checks: list[tuple[UUID, str | None]] = []
+        self.candidate_completion_checks: list[tuple[tuple[UUID, ...], str | None]] = []
         self.skips: list[tuple[UUID, str]] = []
         self.existing_sources: dict[str, object] = {}
 
@@ -104,11 +108,18 @@ class Repository:
     ) -> bool:
         return (stage, structural_unit_ids) in self.successful_model_runs
 
-    async def has_completed_semantic_unit(self, structural_unit_id: UUID) -> bool:
+    async def has_completed_semantic_unit(
+        self, structural_unit_id: UUID, prompt_hash: str | None = None
+    ) -> bool:
+        self.semantic_completion_checks.append((structural_unit_id, prompt_hash))
         return structural_unit_id in self.semantic_completions
 
     async def complete_semantic_unit(
-        self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
+        self,
+        structural_unit_id: UUID,
+        evidence_count: int,
+        prompt_hash: str,
+        completed_at: datetime,
     ) -> None:
         self.semantic_completions.add(structural_unit_id)
 
@@ -116,6 +127,7 @@ class Repository:
         self,
         structural_unit_id: UUID,
         items: tuple[EvidenceItem, ...],
+        prompt_hash: str,
         completed_at: datetime,
     ) -> None:
         self.semantic_result_writes += 1
@@ -127,8 +139,12 @@ class Repository:
         self.semantic_completions.add(structural_unit_id)
 
     async def has_persisted_candidate_run(
-        self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
+        self,
+        case_id: UUID,
+        structural_unit_ids: tuple[UUID, ...],
+        prompt_hash: str | None = None,
     ) -> bool:
+        self.candidate_completion_checks.append((structural_unit_ids, prompt_hash))
         return (
             ("candidates", structural_unit_ids) in self.successful_model_runs
             and bool(self.candidates)
@@ -418,6 +434,14 @@ async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path
     assert repository.direct_evidence_writes == 0
     assert repository.candidate_batch_writes == 4
     assert repository.direct_candidate_writes == 0
+    evidence_prompt_hash = hashlib.sha256(EVIDENCE_PROMPT_TEMPLATE.encode()).hexdigest()
+    candidate_prompt_hash = hashlib.sha256(CANDIDATE_PROMPT_TEMPLATE.encode()).hexdigest()
+    assert {value for _, value in repository.semantic_completion_checks} == {
+        evidence_prompt_hash
+    }
+    assert {value for _, value in repository.candidate_completion_checks} == {
+        candidate_prompt_hash
+    }
     assert report.evidence_items == 8
 
 
