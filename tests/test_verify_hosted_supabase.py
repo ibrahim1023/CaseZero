@@ -19,6 +19,7 @@ def state(**changes) -> HostedState:
         "rls_tables": EXPECTED_TABLES,
         "buckets": {"casezero-sources": False, "casezero-derived": False},
         "processor_visible_final": False,
+        "public_role_grants": 0,
     }
     values.update(changes)
     return HostedState(**values)
@@ -36,6 +37,11 @@ def test_public_or_missing_bucket_fails() -> None:
     errors = evaluate_hosted_state(state(buckets={"casezero-sources": True}))
     assert any("private" in error for error in errors)
     assert any("casezero-derived" in error for error in errors)
+
+
+def test_public_role_grants_fail_closed() -> None:
+    errors = evaluate_hosted_state(state(public_role_grants=1))
+    assert any("grants" in error for error in errors)
 
 
 def test_missing_rls_or_visibility_leak_fails() -> None:

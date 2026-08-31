@@ -50,12 +50,26 @@ async def inspect() -> HostedState:
             )
         ).fetchone()
         processor_visible_final = policy is None or "INVESTIGATION_EVIDENCE" not in str(policy[0])
+        public_role_grants = int(
+            (
+                await (
+                    await connection.execute(
+                        """
+                        select count(*) from information_schema.role_table_grants
+                        where table_schema = 'public'
+                          and grantee in ('anon', 'authenticated')
+                        """
+                    )
+                ).fetchone()
+            )[0]
+        )
         return HostedState(
             environment=str(environment[0]) if environment else "",
             tables=tables,
             rls_tables=rls_tables,
             buckets=buckets,
             processor_visible_final=processor_visible_final,
+            public_role_grants=public_role_grants,
         )
 
 

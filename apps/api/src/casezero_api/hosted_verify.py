@@ -20,6 +20,7 @@ class HostedState:
     rls_tables: set[str]
     buckets: dict[str, bool]
     processor_visible_final: bool
+    public_role_grants: int
 
 
 def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
@@ -41,4 +42,6 @@ def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
             errors.append(f"bucket must be private: {bucket}")
     if state.processor_visible_final:
         errors.append("processor policy may expose FINAL_FINDING")
+    if state.public_role_grants:
+        errors.append(f"public schema grants remain: {state.public_role_grants}")
     return tuple(errors)
