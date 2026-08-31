@@ -30,6 +30,7 @@ def manifest_payload() -> dict[str, object]:
         "caseId": "CEN22FA375",
         "docketUrl": "https://data.ntsb.gov/Docket/?NTSBNumber=CEN22FA375",
         "expectedItemCount": 15,
+        "blindCutoff": "2024-03-20T17:00:00Z",
         "items": [item(index) for index in range(1, 16)],
     }
 

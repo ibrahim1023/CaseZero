@@ -2,6 +2,7 @@
   "caseId": "CEN22FA375",
   "docketUrl": "https://data.ntsb.gov/Docket/?NTSBNumber=CEN22FA375",
   "expectedItemCount": 15,
+  "blindCutoff": "2024-03-20T17:00:00Z",
   "items": [
     {"title":"Accident Photographs","sourceUrl":"https://data.ntsb.gov/Docket/Document/docBLOB?ID=16668409&FileExtension=pdf&FileName=Accident%20Photographs-Rel.pdf","documentType":"IMAGE","fileType":"pdf","pageCount":14,"publishedAt":"2024-03-20T17:00:00Z","rightsStatus":"UNKNOWN","processingDisposition":"LINK_ONLY","attribution":"Source: National Transportation Safety Board","reviewNote":"Photographer ownership is not established by the docket listing; inventory and official link only.","reviewedAt":"2026-08-25T00:00:00Z"},
     {"title":"N51YX Accident Flight ADS-B Data (KMZ)","sourceUrl":"https://data.ntsb.gov/Docket/Document/docBLOB?ID=16658865&FileExtension=kmz&FileName=20220809_A66152_491925156-Rel.kmz","documentType":"FLIGHT_DATA","fileType":"kmz","pageCount":1,"publishedAt":"2024-03-20T17:00:00Z","rightsStatus":"UNKNOWN","processingDisposition":"LINK_ONLY","attribution":"Source: National Transportation Safety Board","reviewNote":"Underlying ADS-B data provider rights are not identified; KMZ is also unsupported in Phase 1.","reviewedAt":"2026-08-25T00:00:00Z"},

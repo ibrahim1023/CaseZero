@@ -47,7 +47,15 @@ class CuratedCaseManifest(CurationModel):
     case_id: str = Field(alias="caseId", min_length=1)
     docket_url: AnyHttpUrl = Field(alias="docketUrl")
     expected_item_count: int = Field(alias="expectedItemCount", ge=1)
+    blind_cutoff: datetime = Field(alias="blindCutoff")
     items: tuple[CuratedDocketItem, ...] = Field(min_length=1)
+
+    @field_validator("blind_cutoff")
+    @classmethod
+    def require_utc_cutoff(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != timedelta(0):
+            raise ValueError("datetime must be UTC-aware")
+        return value
 
 
 class CurationReport(CurationModel):

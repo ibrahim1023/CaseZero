@@ -57,6 +57,7 @@ def curated_manifest() -> CuratedCaseManifest:
             "caseId": "CEN22FA375",
             "docketUrl": "https://data.ntsb.gov/Docket/?NTSBNumber=CEN22FA375",
             "expectedItemCount": 3,
+            "blindCutoff": "2024-03-20T17:00:00Z",
             "items": items,
         },
         strict=False,
@@ -258,6 +259,37 @@ async def test_case_processing_composes_curated_inventory_sources_semantics_and_
     assert report.model_usage == {"fake-model": 2}
     assert "payload" not in report.to_json()
     assert "source 1" not in report.to_json()
+
+
+@pytest.mark.asyncio
+async def test_ai_allowed_final_report_is_blocked_before_materialization(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    (downloads / "01.txt").write_bytes(b"source 1")
+    manifest = curated_manifest()
+    blocked = manifest.items[0].model_copy(update={"title": "Final Report"})
+    manifest = manifest.model_copy(update={"items": (blocked, *manifest.items[1:])})
+    repository = Repository()
+    semantic = SemanticInterpreter([])
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=LocalSourceStore(tmp_path / "sources"),
+        structural_orchestrator=StructuralOrchestrator([]),
+        semantic_interpreter=semantic,
+        candidate_proposer=CandidateProposer([], repository),
+        now=lambda: NOW,
+    )
+
+    report = await service.process_case("CEN22FA375", manifest, downloads)
+
+    assert repository.documents == []
+    assert semantic.dispositions == []
+    assert report.status_counts == {
+        "SKIPPED_RIGHTS": 2,
+        "SKIPPED_VISIBILITY": 1,
+        "SUCCEEDED": 0,
+    }
+    assert any(reason.startswith("VISIBILITY_BLOCKED:") for _, reason in repository.skips)
 
 
 @pytest.mark.asyncio

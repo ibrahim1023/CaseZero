@@ -44,6 +44,7 @@ from casezero_ntsb.curation import (
     load_curated_manifest,
     validate_curated_manifest,
 )
+from casezero_ntsb.visibility import classify_visibility
 from casezero_observability import (
     ModelFailure,
     ModelRouter,
@@ -241,6 +242,20 @@ class CaseProcessingService:
                 )
                 statuses["SKIPPED_RIGHTS"] += 1
                 continue
+            visibility = classify_visibility(
+                curated_item.document_type.value if curated_item.document_type else None,
+                curated_item.title,
+                curated_item.published_at,
+                manifest.blind_cutoff,
+            )
+            if visibility is not Visibility.INVESTIGATION_EVIDENCE:
+                await self._repository.record_processing_skip(
+                    docket_item_id,
+                    f"VISIBILITY_BLOCKED: {visibility.value}",
+                    self._now(),
+                )
+                statuses["SKIPPED_VISIBILITY"] += 1
+                continue
             try:
                 source = await self._materialize_source(
                     case_id,
@@ -248,6 +263,7 @@ class CaseProcessingService:
                     curated_item,
                     docket_item,
                     docket_item_id,
+                    visibility,
                     downloads_root,
                 )
             except (OSError, StoreIntegrityError, ValueError) as error:
@@ -444,6 +460,7 @@ class CaseProcessingService:
         curated_item: CuratedDocketItem,
         docket_item: DocketItem,
         docket_item_id: UUID,
+        visibility: Visibility,
         downloads_root: Path | None,
     ) -> ProcessingSource:
         suffix = curated_item.file_type or "bin"
@@ -485,7 +502,7 @@ class CaseProcessingService:
                 published_at=curated_item.published_at,
                 retrieved_at=retrieved_at,
                 document_type=curated_item.document_type or DocumentType.OTHER,
-                visibility=Visibility.INVESTIGATION_EVIDENCE,
+                visibility=visibility,
                 checksum=checksum,
             )
         await self._repository.link_source_document(
