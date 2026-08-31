@@ -551,6 +551,18 @@ class EvidenceRepository:
             (structural_unit_id, evidence_count, completed_at, [structural_unit_id]),
         )
 
+    async def persist_semantic_result(
+        self,
+        structural_unit_id: UUID,
+        items: tuple[EvidenceItem, ...],
+        completed_at: datetime,
+    ) -> None:
+        async with self._connection.transaction():
+            await self.add_evidence_items(items, completed_at)
+            await self.complete_semantic_unit(
+                structural_unit_id, len(items), completed_at
+            )
+
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
     ) -> bool:
@@ -587,6 +599,12 @@ class EvidenceRepository:
             (list(dict.fromkeys(run_ids)),),
         )
         return {str(row[0]): int(str(row[1])) for row in await cursor.fetchall()}
+
+    async def persist_candidate_batch(
+        self, candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]
+    ) -> None:
+        async with self._connection.transaction():
+            await self.add_candidates(candidates)
 
     async def add_candidates(
         self, candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]

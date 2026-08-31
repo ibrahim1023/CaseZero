@@ -72,6 +72,10 @@ class Repository:
         self.candidates = []
         self.successful_model_runs: set[tuple[str, tuple[UUID, ...]]] = set()
         self.semantic_completions: set[UUID] = set()
+        self.direct_evidence_writes = 0
+        self.semantic_result_writes = 0
+        self.direct_candidate_writes = 0
+        self.candidate_batch_writes = 0
         self.skips: list[tuple[UUID, str]] = []
         self.existing_sources: dict[str, object] = {}
 
@@ -108,6 +112,20 @@ class Repository:
     ) -> None:
         self.semantic_completions.add(structural_unit_id)
 
+    async def persist_semantic_result(
+        self,
+        structural_unit_id: UUID,
+        items: tuple[EvidenceItem, ...],
+        completed_at: datetime,
+    ) -> None:
+        self.semantic_result_writes += 1
+        for item in items:
+            assert item.structural_unit_id is not None
+            self.evidence[item.structural_unit_id] = self.evidence.get(
+                item.structural_unit_id, ()
+            ) + (item,)
+        self.semantic_completions.add(structural_unit_id)
+
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
     ) -> bool:
@@ -122,6 +140,7 @@ class Repository:
     async def add_evidence_items(
         self, items: tuple[EvidenceItem, ...], created_at: datetime
     ) -> None:
+        self.direct_evidence_writes += 1
         for item in items:
             assert item.structural_unit_id is not None
             self.evidence[item.structural_unit_id] = self.evidence.get(
@@ -129,6 +148,11 @@ class Repository:
             ) + (item,)
 
     async def add_candidates(self, candidates) -> None:
+        self.direct_candidate_writes += 1
+        self.candidates.extend(candidates)
+
+    async def persist_candidate_batch(self, candidates) -> None:
+        self.candidate_batch_writes += 1
         self.candidates.extend(candidates)
 
     async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]:
@@ -390,6 +414,10 @@ async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path
     assert candidates.max_active == 4
     assert sorted(candidates.batch_sizes) == [2, 2, 2, 2]
     assert progress[-1] == (8, 8)
+    assert repository.semantic_result_writes == 8
+    assert repository.direct_evidence_writes == 0
+    assert repository.candidate_batch_writes == 4
+    assert repository.direct_candidate_writes == 0
     assert report.evidence_items == 8
 
 

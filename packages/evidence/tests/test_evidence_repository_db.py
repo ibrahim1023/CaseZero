@@ -141,9 +141,8 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
             extraction_method=ExtractionMethod.AI,
             confidence=0.9,
         )
-        await repository.add_evidence_items((evidence,), NOW)
         assert not await repository.has_completed_semantic_unit(unit.id)
-        await repository.complete_semantic_unit(unit.id, 1, NOW)
+        await repository.persist_semantic_result(unit.id, (evidence,), NOW)
         assert await repository.has_completed_semantic_unit(unit.id)
         candidate = ClaimCandidate(
             case_id=case_id,
@@ -154,7 +153,7 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
             model_run_id=model_run_id,
             created_at=NOW,
         )
-        await repository.add_candidates((candidate,))
+        await repository.persist_candidate_batch((candidate,))
 
         cursor = await connection.execute(
             """

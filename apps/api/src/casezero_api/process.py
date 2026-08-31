@@ -94,6 +94,13 @@ class CaseProcessingRepository(Protocol):
         self, structural_unit_id: UUID, evidence_count: int, completed_at: datetime
     ) -> None: ...
 
+    async def persist_semantic_result(
+        self,
+        structural_unit_id: UUID,
+        items: tuple[EvidenceItem, ...],
+        completed_at: datetime,
+    ) -> None: ...
+
     async def has_persisted_candidate_run(
         self, case_id: UUID, structural_unit_ids: tuple[UUID, ...]
     ) -> bool: ...
@@ -107,6 +114,11 @@ class CaseProcessingRepository(Protocol):
     ) -> None: ...
 
     async def add_candidates(
+        self,
+        candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
+    ) -> None: ...
+
+    async def persist_candidate_batch(
         self,
         candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
     ) -> None: ...
@@ -336,9 +348,8 @@ class CaseProcessingService:
                         case_id, unit, disposition
                     )
                 completed_at = self._now()
-                await self._repository.add_evidence_items(interpreted, completed_at)
-                await self._repository.complete_semantic_unit(
-                    unit.id, len(interpreted), completed_at
+                await self._repository.persist_semantic_result(
+                    unit.id, interpreted, completed_at
                 )
                 return interpreted, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
@@ -411,7 +422,7 @@ class CaseProcessingService:
                     proposed = await self._candidate_proposer.propose(
                         case_id, batch, disposition, self._now()
                     )
-                await self._repository.add_candidates(proposed)
+                await self._repository.persist_candidate_batch(proposed)
                 return proposed, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
                 return (), ProcessingFailure(
