@@ -331,6 +331,7 @@ class CaseProcessingService:
 
         evidence: list[EvidenceItem] = []
         new_evidence: list[EvidenceItem] = []
+        persistence_lock = asyncio.Lock()
         model_run_ids: list[UUID] = []
         reused_semantic = 0
         pending_units: list[StructuralUnit] = []
@@ -361,9 +362,10 @@ class CaseProcessingService:
                         case_id, unit, disposition
                     )
                 completed_at = self._now()
-                await self._repository.persist_semantic_result(
-                    unit.id, interpreted, EVIDENCE_PROMPT_HASH, completed_at
-                )
+                async with persistence_lock:
+                    await self._repository.persist_semantic_result(
+                        unit.id, interpreted, EVIDENCE_PROMPT_HASH, completed_at
+                    )
                 return interpreted, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
                 return (), ProcessingFailure(
@@ -435,7 +437,8 @@ class CaseProcessingService:
                     proposed = await self._candidate_proposer.propose(
                         case_id, batch, disposition, self._now()
                     )
-                await self._repository.persist_candidate_batch(proposed)
+                async with persistence_lock:
+                    await self._repository.persist_candidate_batch(proposed)
                 return proposed, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
                 return (), ProcessingFailure(

@@ -80,6 +80,8 @@ class Repository:
         self.semantic_result_writes = 0
         self.direct_candidate_writes = 0
         self.candidate_batch_writes = 0
+        self.active_persistence = 0
+        self.max_active_persistence = 0
         self.semantic_completion_checks: list[tuple[UUID, str | None]] = []
         self.candidate_completion_checks: list[tuple[tuple[UUID, ...], str | None]] = []
         self.skips: list[tuple[UUID, str]] = []
@@ -132,6 +134,11 @@ class Repository:
         prompt_hash: str,
         completed_at: datetime,
     ) -> None:
+        self.active_persistence += 1
+        self.max_active_persistence = max(
+            self.max_active_persistence, self.active_persistence
+        )
+        await asyncio.sleep(0.001)
         self.semantic_result_writes += 1
         for item in items:
             assert item.structural_unit_id is not None
@@ -139,6 +146,7 @@ class Repository:
                 item.structural_unit_id, ()
             ) + (item,)
         self.semantic_completions.add(structural_unit_id)
+        self.active_persistence -= 1
 
     async def has_persisted_candidate_run(
         self,
@@ -177,8 +185,14 @@ class Repository:
         self.candidates.extend(candidates)
 
     async def persist_candidate_batch(self, candidates) -> None:
+        self.active_persistence += 1
+        self.max_active_persistence = max(
+            self.max_active_persistence, self.active_persistence
+        )
+        await asyncio.sleep(0.001)
         self.candidate_batch_writes += 1
         self.candidates.extend(candidates)
+        self.active_persistence -= 1
 
     async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]:
         return {"fake-model": len(set(run_ids))}
@@ -443,6 +457,7 @@ async def test_model_processing_is_batched_bounded_and_reports_progress(tmp_path
     assert repository.direct_evidence_writes == 0
     assert repository.candidate_batch_writes == 4
     assert repository.direct_candidate_writes == 0
+    assert repository.max_active_persistence == 1
     evidence_prompt_hash = hashlib.sha256(EVIDENCE_PROMPT_TEMPLATE.encode()).hexdigest()
     candidate_prompt_hash = hashlib.sha256(CANDIDATE_PROMPT_TEMPLATE.encode()).hexdigest()
     assert {value for _, value in repository.semantic_completion_checks} == {
