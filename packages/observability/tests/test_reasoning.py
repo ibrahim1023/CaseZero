@@ -8,6 +8,7 @@ from casezero_observability.reasoning import (
     ModelRouter,
     ModelRoutingDenied,
     ReasoningRequest,
+    StructuredGeneration,
 )
 from pydantic import BaseModel
 
@@ -23,11 +24,16 @@ class FakeModel:
     calls: int = 0
     provider: str = "hyperfusion"
 
-    async def generate(self, request: ReasoningRequest[Output]) -> Output:
+    async def generate(self, request: ReasoningRequest[Output]) -> StructuredGeneration[Output]:
         self.calls += 1
         if self.fail:
             raise ModelFailure("schema exhausted")
-        return Output(value=self.name)
+        return StructuredGeneration(
+            output=Output(value=self.name),
+            input_tokens=12,
+            output_tokens=4,
+            retry_count=1,
+        )
 
 
 class Recorder:
@@ -61,6 +67,27 @@ async def test_non_ai_allowed_never_calls_model(disposition: ProcessingDispositi
             ReasoningRequest(stage="evidence", prompt="bounded", output_type=Output), disposition
         )
     assert model.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_successful_run_records_provider_usage() -> None:
+    case_id = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
+    recorder = Recorder()
+    router = ModelRouter(FakeModel("hyperfusion"), recorder=recorder)
+
+    await router.generate(
+        ReasoningRequest(
+            stage="evidence",
+            prompt="bounded",
+            output_type=Output,
+            case_id=case_id,
+        ),
+        ProcessingDisposition.AI_ALLOWED,
+    )
+
+    assert recorder.runs[0]["input_tokens"] == 12
+    assert recorder.runs[0]["output_tokens"] == 4
+    assert recorder.runs[0]["retry_count"] == 1
 
 
 @pytest.mark.asyncio

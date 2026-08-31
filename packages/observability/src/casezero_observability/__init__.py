@@ -5,6 +5,7 @@ from casezero_observability.reasoning import (
     PydanticReasoningModel,
     ReasoningRequest,
     ReasoningResult,
+    StructuredGeneration,
     StructuredModel,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "PydanticReasoningModel",
     "ReasoningRequest",
     "ReasoningResult",
+    "StructuredGeneration",
     "StructuredModel",
 ]

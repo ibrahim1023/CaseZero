@@ -41,12 +41,21 @@ class ReasoningResult[OutputT: BaseModel]:
     run_id: UUID = field(default_factory=uuid4)
 
 
+@dataclass(frozen=True, slots=True)
+class StructuredGeneration[OutputT: BaseModel]:
+    output: OutputT
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    retry_count: int = 0
+    schema_failure_count: int = 0
+
+
 class StructuredModel(Protocol):
     name: str
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
-    ) -> OutputT: ...
+    ) -> StructuredGeneration[OutputT]: ...
 
 
 class ModelRunRecorder(Protocol):
@@ -100,7 +109,7 @@ class ModelRouter:
         started_at = datetime.now(UTC)
         started = time.monotonic()
         try:
-            output = await model.generate(request)
+            generation = await model.generate(request)
         except ModelFailure:
             await self._record(
                 model,
@@ -110,6 +119,7 @@ class ModelRouter:
                 started_at,
                 started,
                 "FAILED",
+                None,
             )
             raise
         await self._record(
@@ -120,8 +130,9 @@ class ModelRouter:
             started_at,
             started,
             "SUCCEEDED",
+            generation,
         )
-        return output
+        return generation.output
 
     async def _record(
         self,
@@ -132,6 +143,7 @@ class ModelRouter:
         started_at: datetime,
         started: float,
         status: str,
+        generation: StructuredGeneration[BaseModel] | None,
     ) -> None:
         if self._recorder is None:
             return
@@ -146,11 +158,13 @@ class ModelRouter:
             model=model.name,
             prompt_hash=request.prompt_hash,
             structural_unit_ids=request.structural_unit_ids,
-            input_tokens=None,
-            output_tokens=None,
+            input_tokens=generation.input_tokens if generation is not None else None,
+            output_tokens=generation.output_tokens if generation is not None else None,
             latency_ms=max(0, int((time.monotonic() - started) * 1000)),
-            retry_count=0,
-            schema_failure_count=0,
+            retry_count=generation.retry_count if generation is not None else 0,
+            schema_failure_count=(
+                generation.schema_failure_count if generation is not None else 0
+            ),
             status=status,
             created_at=started_at,
         )
@@ -179,10 +193,16 @@ class PydanticReasoningModel:
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
-    ) -> OutputT:
+    ) -> StructuredGeneration[OutputT]:
         agent = Agent(self._model, output_type=request.output_type, retries=2)
         try:
             result = await agent.run(request.prompt)
         except (UnexpectedModelBehavior, ModelAPIError) as error:
             raise ModelFailure(type(error).__name__) from error
-        return result.output
+        usage = result.usage
+        return StructuredGeneration(
+            output=result.output,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            retry_count=max(0, usage.requests - 1),
+        )
