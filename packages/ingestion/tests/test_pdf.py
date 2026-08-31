@@ -17,6 +17,7 @@ from casezero_evidence import (
 from casezero_ingestion.pdf import (
     ParsedPdfBlock,
     ParsedPdfDocument,
+    PdfLocatorAdapter,
     PdfProcessor,
     StructuralProcessingError,
 )
@@ -63,6 +64,24 @@ def source() -> ProcessingSource:
         ),
         data=b"%PDF fixture",
     )
+
+
+def test_pdf_locator_adapter_resolves_exact_reading_order_block() -> None:
+    parsed = ParsedPdfDocument(
+        blocks=(
+            ParsedPdfBlock(page=1, reading_order=0, text="First paragraph"),
+            ParsedPdfBlock(page=1, reading_order=1, text="Second paragraph"),
+        ),
+        page_signals={},
+        structure_bytes=b"{}",
+    )
+
+    resolved = PdfLocatorAdapter(FixtureAdapter(parsed)).resolve(
+        source().data, PdfLocator(page=1, reading_order=1)
+    )
+
+    assert resolved.media_type == "text/plain; charset=utf-8"
+    assert resolved.content == b"Second paragraph"
 
 
 def test_pdf_processor_preserves_page_order_and_scan_routing() -> None:

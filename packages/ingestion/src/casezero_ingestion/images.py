@@ -9,6 +9,7 @@ from casezero_evidence import (
     ProcessingSource,
     StructuralUnitKind,
 )
+from casezero_evidence.locator import LocatorResolutionError, ResolvedRegion
 from PIL import Image, UnidentifiedImageError
 from pydantic import JsonValue
 
@@ -18,6 +19,33 @@ from casezero_ingestion.processors import StructuralOutput, StructuralUnitDraft
 
 class ImageProcessingError(ValueError):
     pass
+
+
+class ImageLocatorAdapter:
+    def supports(self, locator: object) -> bool:
+        return isinstance(locator, ImageLocator)
+
+    def resolve(self, source: bytes, locator: object) -> ResolvedRegion:
+        if not isinstance(locator, ImageLocator):
+            raise LocatorResolutionError("image adapter requires ImageLocator")
+        try:
+            with Image.open(io.BytesIO(source)) as image:
+                if image.size != (locator.width, locator.height):
+                    raise LocatorResolutionError("image dimensions do not match locator")
+                if locator.region is None:
+                    return ResolvedRegion(
+                        media_type=Image.MIME.get(image.format or "", "application/octet-stream"),
+                        content=source,
+                    )
+                region = locator.region
+                cropped = image.crop(
+                    (round(region.x1), round(region.y1), round(region.x2), round(region.y2))
+                )
+                output = io.BytesIO()
+                cropped.save(output, format="PNG")
+                return ResolvedRegion(media_type="image/png", content=output.getvalue())
+        except (UnidentifiedImageError, OSError) as error:
+            raise LocatorResolutionError("image source cannot be decoded") from error
 
 
 class ImageProcessor:

@@ -10,7 +10,7 @@ from casezero_evidence import (
     TableLocator,
     Visibility,
 )
-from casezero_ingestion.tables import TableProcessor
+from casezero_ingestion.tables import TableLocatorAdapter, TableProcessor
 from pydantic import AnyHttpUrl
 
 CASE_ID = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
@@ -33,6 +33,16 @@ def test_default_table_windows_bound_model_payload_to_fifty_rows() -> None:
         source(("time,altitude\n" + rows + "\n").encode(), "csv")
     )
     assert [len(unit.payload["rows"]) for unit in output.units] == [50, 50, 20]
+
+
+def test_csv_locator_adapter_resolves_exact_rows_and_columns() -> None:
+    data = b"time,altitude,status\n0,100,climb\n1,120,level\n2,90,descent\n"
+    locator = TableLocator(row=2, row_end=3, columns=("time", "status"), sheet="")
+
+    resolved = TableLocatorAdapter().resolve(data, locator)
+
+    assert resolved.media_type == "text/csv; charset=utf-8"
+    assert resolved.content == b"time,status\r\n0,climb\r\n1,level\r\n"
 
 
 def test_csv_processor_preserves_rows_columns_and_raw_values() -> None:

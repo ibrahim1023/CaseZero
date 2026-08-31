@@ -12,10 +12,42 @@ from casezero_evidence import (
     StructuralUnitKind,
     TableLocator,
 )
+from casezero_evidence.locator import LocatorResolutionError, ResolvedRegion
 from pydantic import JsonValue
 
 from casezero_ingestion.media import DetectedMediaType
 from casezero_ingestion.processors import StructuralOutput, StructuralUnitDraft
+
+
+class TableLocatorAdapter:
+    def supports(self, locator: object) -> bool:
+        return isinstance(locator, TableLocator)
+
+    def resolve(self, source: bytes, locator: object) -> ResolvedRegion:
+        if not isinstance(locator, TableLocator):
+            raise LocatorResolutionError("table adapter requires TableLocator")
+        file_type = "xlsx" if source.startswith(b"PK\x03\x04") else "csv"
+        sheets = _read_table(source, file_type)
+        sheet = next((value for value in sheets if value[0] == (locator.sheet or "")), None)
+        if sheet is None:
+            raise LocatorResolutionError("table sheet does not exist")
+        _, columns, rows = sheet
+        try:
+            indexes = [columns.index(column) for column in locator.columns]
+        except ValueError as error:
+            raise LocatorResolutionError("table locator column does not exist") from error
+        start = locator.row - 2
+        end = (locator.row_end or locator.row) - 1
+        if start < 0 or end > len(rows):
+            raise LocatorResolutionError("table locator exceeds source rows")
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(locator.columns)
+        writer.writerows([[row[index] for index in indexes] for row in rows[start:end]])
+        return ResolvedRegion(
+            media_type="text/csv; charset=utf-8",
+            content=output.getvalue().encode(),
+        )
 
 
 class TableProcessor:
@@ -70,17 +102,21 @@ class TableProcessor:
 
     @staticmethod
     def _read(source: ProcessingSource) -> list[tuple[str, list[str], list[list[str]]]]:
-        if source.docket_item.file_type == "xlsx":
-            reader = fastexcel.read_excel(source.data)
-            result = []
-            for sheet_name in reader.sheet_names:
-                frame = reader.load_sheet_by_name(sheet_name).to_polars()
-                columns = list(frame.columns)
-                rows = [["" if value is None else str(value) for value in row] for row in frame.rows()]
-                result.append((sheet_name, columns, rows))
-            return result
-        text = source.data.decode("utf-8-sig")
-        parsed = list(csv.reader(io.StringIO(text)))
-        if not parsed:
-            raise ValueError("table source is empty")
-        return [("", parsed[0], parsed[1:])]
+        return _read_table(source.data, source.docket_item.file_type or "csv")
+
+
+def _read_table(data: bytes, file_type: str) -> list[tuple[str, list[str], list[list[str]]]]:
+    if file_type == "xlsx":
+        reader = fastexcel.read_excel(data)
+        result = []
+        for sheet_name in reader.sheet_names:
+            frame = reader.load_sheet_by_name(sheet_name).to_polars()
+            columns = list(frame.columns)
+            rows = [["" if value is None else str(value) for value in row] for row in frame.rows()]
+            result.append((sheet_name, columns, rows))
+        return result
+    text = data.decode("utf-8-sig")
+    parsed = list(csv.reader(io.StringIO(text)))
+    if not parsed:
+        raise ValueError("table source is empty")
+    return [("", parsed[0], parsed[1:])]

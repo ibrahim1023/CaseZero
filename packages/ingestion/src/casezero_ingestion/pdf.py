@@ -12,6 +12,7 @@ from casezero_evidence import (
     ProcessingSource,
     StructuralUnitKind,
 )
+from casezero_evidence.locator import LocatorResolutionError, ResolvedRegion
 from pydantic import JsonValue
 
 from casezero_ingestion.media import DetectedMediaType
@@ -46,6 +47,35 @@ class ParsedPdfDocument:
 
 class PdfAdapter(Protocol):
     def convert(self, data: bytes) -> ParsedPdfDocument: ...
+
+
+class PdfLocatorAdapter:
+    def __init__(self, adapter: PdfAdapter) -> None:
+        self._adapter = adapter
+
+    def supports(self, locator: object) -> bool:
+        return isinstance(locator, PdfLocator)
+
+    def resolve(self, source: bytes, locator: object) -> ResolvedRegion:
+        if not isinstance(locator, PdfLocator):
+            raise LocatorResolutionError("PDF adapter requires PdfLocator")
+        parsed = self._adapter.convert(source)
+        blocks = [block for block in parsed.blocks if block.page == locator.page]
+        if locator.reading_order is not None:
+            blocks = [block for block in blocks if block.reading_order == locator.reading_order]
+        elif locator.paragraph is not None:
+            index = locator.paragraph - 1
+            blocks = blocks[index : index + 1]
+        if locator.section is not None:
+            blocks = [block for block in blocks if block.section == locator.section]
+        if locator.bounding_box is not None:
+            blocks = [block for block in blocks if block.bounding_box == locator.bounding_box]
+        if not blocks:
+            raise LocatorResolutionError("PDF locator does not resolve to extracted text")
+        return ResolvedRegion(
+            media_type="text/plain; charset=utf-8",
+            content="\n".join(block.text for block in blocks).encode(),
+        )
 
 
 class DoclingPdfAdapter:
