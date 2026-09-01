@@ -186,7 +186,8 @@ the target visibility without exposing it to the blind caller.
 1. Require an aware UTC cutoff.
 2. Lock the case row.
 3. Permit `ACQUIRING -> BLIND` and set the cutoff atomically.
-4. Permit `BLIND -> BLIND` only if the cutoff is identical.
+4. For migrated `BLIND` rows only, permit one explicit `NULL -> cutoff`
+   backfill; afterward permit `BLIND -> BLIND` only if the cutoff is identical.
 5. Reject `LOCKED` and `REVEALED`.
 6. Append a lifecycle audit event.
 
