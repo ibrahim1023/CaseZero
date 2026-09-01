@@ -11,6 +11,8 @@ EXPECTED_TABLES = {
     "model_runs",
     "semantic_unit_completions",
     "candidate_batch_completions",
+    "investigation_locks",
+    "access_audit_events",
 }
 
 
@@ -22,6 +24,11 @@ def state(**changes) -> HostedState:
         "buckets": {"casezero-sources": False, "casezero-derived": False},
         "processor_visible_final": False,
         "public_role_grants": 0,
+        "cutoff_column": True,
+        "lock_table": True,
+        "audit_table": True,
+        "lock_rls": True,
+        "audit_rls": True,
     }
     values.update(changes)
     return HostedState(**values)
@@ -29,6 +36,21 @@ def state(**changes) -> HostedState:
 
 def test_development_private_hosted_state_passes() -> None:
     assert evaluate_hosted_state(state()) == ()
+
+
+def test_phase2_schema_is_required() -> None:
+    errors = evaluate_hosted_state(
+        state(
+            cutoff_column=False,
+            lock_table=False,
+            audit_table=False,
+            lock_rls=False,
+            audit_rls=False,
+        )
+    )
+    assert any("evidence_cutoff" in error for error in errors)
+    assert any("investigation_locks" in error for error in errors)
+    assert any("access_audit_events" in error for error in errors)
 
 
 def test_production_target_fails_closed() -> None:

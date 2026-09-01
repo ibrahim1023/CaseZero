@@ -11,6 +11,8 @@ EXPECTED_TABLES = {
     "model_runs",
     "semantic_unit_completions",
     "candidate_batch_completions",
+    "investigation_locks",
+    "access_audit_events",
 }
 EXPECTED_BUCKETS = {"casezero-sources", "casezero-derived"}
 
@@ -23,6 +25,11 @@ class HostedState:
     buckets: dict[str, bool]
     processor_visible_final: bool
     public_role_grants: int
+    cutoff_column: bool
+    lock_table: bool
+    audit_table: bool
+    lock_rls: bool
+    audit_rls: bool
 
 
 def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
@@ -46,4 +53,10 @@ def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
         errors.append("processor policy may expose FINAL_FINDING")
     if state.public_role_grants:
         errors.append(f"public schema grants remain: {state.public_role_grants}")
+    if not state.cutoff_column:
+        errors.append("cases.evidence_cutoff is missing")
+    if not state.lock_table or not state.lock_rls:
+        errors.append("investigation_locks is missing forced RLS")
+    if not state.audit_table or not state.audit_rls:
+        errors.append("access_audit_events is missing forced RLS")
     return tuple(errors)

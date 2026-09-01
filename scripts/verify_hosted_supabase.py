@@ -26,7 +26,8 @@ async def inspect() -> HostedState:
                     """
                     select c.relname from pg_class c
                     join pg_namespace n on n.oid = c.relnamespace
-                    where n.nspname = 'public' and c.relrowsecurity
+                    where n.nspname = 'public'
+                      and c.relrowsecurity and c.relforcerowsecurity
                     """
                 )
             ).fetchall()
@@ -63,6 +64,18 @@ async def inspect() -> HostedState:
                 ).fetchone()
             )[0]
         )
+        cutoff_column = (
+            await (
+                await connection.execute(
+                    """
+                    select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'cases'
+                      and column_name = 'evidence_cutoff'
+                    """
+                )
+            ).fetchone()
+            is not None
+        )
         return HostedState(
             environment=str(environment[0]) if environment else "",
             tables=tables,
@@ -70,6 +83,11 @@ async def inspect() -> HostedState:
             buckets=buckets,
             processor_visible_final=processor_visible_final,
             public_role_grants=public_role_grants,
+            cutoff_column=cutoff_column,
+            lock_table="investigation_locks" in tables,
+            audit_table="access_audit_events" in tables,
+            lock_rls="investigation_locks" in rls_tables,
+            audit_rls="access_audit_events" in rls_tables,
         )
 
 
