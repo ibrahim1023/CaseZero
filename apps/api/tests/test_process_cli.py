@@ -86,7 +86,7 @@ class Repository:
         self.semantic_completion_checks: list[tuple[UUID, str | None]] = []
         self.candidate_completion_checks: list[tuple[str, str | None]] = []
         self.candidate_completions: set[str] = set()
-        self.skips: list[tuple[UUID, str]] = []
+        self.skips: list[tuple[UUID, str, str]] = []
         self.existing_sources: dict[str, object] = {}
 
     async def get_case_id(self, ntsb_number: str) -> UUID | None:
@@ -97,9 +97,9 @@ class Repository:
         return item.id
 
     async def record_processing_skip(
-        self, docket_item_id: UUID, reason: str, created_at: datetime
+        self, docket_item_id: UUID, status: str, reason: str, created_at: datetime
     ) -> None:
-        self.skips.append((docket_item_id, reason))
+        self.skips.append((docket_item_id, status, reason))
 
     async def get_source_document(self, case_id: UUID, source_url: str):
         return self.existing_sources.get(source_url)
@@ -308,7 +308,7 @@ async def test_case_processing_composes_curated_inventory_sources_semantics_and_
     assert len(repository.docket_items) == 3
     assert len(repository.documents) == 1
     assert len(repository.skips) == 2
-    assert {reason.split(":", 1)[0] for _, reason in repository.skips} == {
+    assert {reason.split(":", 1)[0] for _, _, reason in repository.skips} == {
         "LINK_ONLY",
         "LOCAL_ONLY",
     }
@@ -357,7 +357,11 @@ async def test_ai_allowed_final_report_is_blocked_before_materialization(tmp_pat
         "SKIPPED_VISIBILITY": 1,
         "SUCCEEDED": 0,
     }
-    assert any(reason.startswith("VISIBILITY_BLOCKED:") for _, reason in repository.skips)
+    assert any(
+        status == "SKIPPED_VISIBILITY" and reason.startswith("FINAL_FINDING:")
+        for _, status, reason in repository.skips
+    )
+    assert report.failures == ()
 
 
 @pytest.mark.asyncio

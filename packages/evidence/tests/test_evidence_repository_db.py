@@ -22,6 +22,7 @@ from casezero_evidence import (
 )
 from casezero_evidence.repository import EvidenceRepository
 from psycopg import AsyncConnection
+from psycopg.errors import ForeignKeyViolation
 from pydantic import AnyHttpUrl
 
 DATABASE_URL = os.getenv(
@@ -70,6 +71,33 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
         )
         repository = EvidenceRepository(connection)
         docket_item_id = await repository.upsert_docket_item(item)
+        await repository.record_processing_skip(
+            docket_item_id,
+            "SKIPPED_VISIBILITY",
+            "FINAL_FINDING: fixture",
+            NOW,
+        )
+        skip_status = await (
+            await connection.execute(
+                "select status from public.processing_skips where docket_item_id = %s",
+                (docket_item_id,),
+            )
+        ).fetchone()
+        assert skip_status == ("SKIPPED_VISIBILITY",)
+        invalid_document = document.model_copy(
+            update={"id": uuid4(), "checksum": "b" * 64}
+        )
+        with pytest.raises(ForeignKeyViolation):
+            await repository.link_source_document(
+                invalid_document, uuid4(), "bb/" + "b" * 64, 12
+            )
+        orphan_blob_count = await (
+            await connection.execute(
+                "select count(*) from public.source_blobs where checksum = %s",
+                ("b" * 64,),
+            )
+        ).fetchone()
+        assert orphan_blob_count == (0,)
         await repository.link_source_document(document, docket_item_id, "aa/" + "a" * 64, 12)
         second_document = document.model_copy(
             update={

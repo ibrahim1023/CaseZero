@@ -46,17 +46,17 @@ class EvidenceRepository:
         return row[0] if row is not None and isinstance(row[0], UUID) else None
 
     async def record_processing_skip(
-        self, docket_item_id: UUID, reason: str, created_at: datetime
+        self, docket_item_id: UUID, status: str, reason: str, created_at: datetime
     ) -> None:
         await self._connection.execute(
             """
             insert into public.processing_skips (
               docket_item_id, status, reason, created_at
-            ) values (%s, 'SKIPPED_RIGHTS', %s, %s)
+            ) values (%s, %s, %s, %s)
             on conflict (docket_item_id, status) do update set
               reason = excluded.reason, created_at = excluded.created_at
             """,
-            (docket_item_id, reason, created_at),
+            (docket_item_id, status, reason, created_at),
         )
 
     async def get_source_document(
@@ -138,6 +138,18 @@ class EvidenceRepository:
         return row[0]
 
     async def link_source_document(
+        self,
+        document: SourceDocument,
+        docket_item_id: UUID,
+        storage_path: str,
+        byte_size: int,
+    ) -> None:
+        async with self._connection.transaction():
+            await self._link_source_document(
+                document, docket_item_id, storage_path, byte_size
+            )
+
+    async def _link_source_document(
         self,
         document: SourceDocument,
         docket_item_id: UUID,

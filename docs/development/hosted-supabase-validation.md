@@ -27,7 +27,8 @@ roles and hardened matching default privileges. Migration 0007 added explicit
 semantic-unit completion checkpoints so valid zero-observation results are
 idempotent without fabricating evidence. Migration 0008 applies the same
 explicit completion contract to candidate batches, keyed by their exact
-evidence sets, including valid zero-candidate outputs.
+evidence sets, including valid zero-candidate outputs. Migration 0009 separates
+visibility-blocked audit records from rights-based skips.
 
 Applied migrations:
 
@@ -40,6 +41,7 @@ Applied migrations:
 0006_revoke_public_access.sql
 0007_semantic_unit_completions.sql
 0008_candidate_batch_completions.sql
+0009_processing_skip_statuses.sql
 ```
 
 ## Hosted verification

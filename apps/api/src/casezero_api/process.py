@@ -69,7 +69,7 @@ class CaseProcessingRepository(Protocol):
     async def upsert_docket_item(self, item: DocketItem) -> UUID: ...
 
     async def record_processing_skip(
-        self, docket_item_id: UUID, reason: str, created_at: datetime
+        self, docket_item_id: UUID, status: str, reason: str, created_at: datetime
     ) -> None: ...
 
     async def get_source_document(
@@ -273,6 +273,7 @@ class CaseProcessingService:
                     )
                 await self._repository.record_processing_skip(
                     docket_item_id,
+                    "SKIPPED_RIGHTS",
                     f"{disposition.value}: {curated_item.review_note}",
                     self._now(),
                 )
@@ -287,7 +288,8 @@ class CaseProcessingService:
             if visibility is not Visibility.INVESTIGATION_EVIDENCE:
                 await self._repository.record_processing_skip(
                     docket_item_id,
-                    f"VISIBILITY_BLOCKED: {visibility.value}",
+                    "SKIPPED_VISIBILITY",
+                    f"{visibility.value}: blocked by blind cutoff classifier",
                     self._now(),
                 )
                 statuses["SKIPPED_VISIBILITY"] += 1
@@ -671,7 +673,13 @@ def _docket_item(case_id: UUID, item: CuratedDocketItem) -> DocketItem:
 
 
 def _all_documents_terminal(statuses: Counter[str]) -> bool:
-    terminal = {"SUCCEEDED", "FAILED", "UNSUPPORTED", "SKIPPED_RIGHTS"}
+    terminal = {
+        "SUCCEEDED",
+        "FAILED",
+        "UNSUPPORTED",
+        "SKIPPED_RIGHTS",
+        "SKIPPED_VISIBILITY",
+    }
     return not (set(statuses) - terminal)
 
 
