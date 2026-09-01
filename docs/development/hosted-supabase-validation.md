@@ -25,7 +25,9 @@ it was applied. A later live access audit found Supabase's default table grants;
 migration 0006 revoked table, sequence, and function access from public client
 roles and hardened matching default privileges. Migration 0007 added explicit
 semantic-unit completion checkpoints so valid zero-observation results are
-idempotent without fabricating evidence.
+idempotent without fabricating evidence. Migration 0008 applies the same
+explicit completion contract to candidate batches, keyed by their exact
+evidence sets, including valid zero-candidate outputs.
 
 Applied migrations:
 
@@ -37,6 +39,7 @@ Applied migrations:
 0005_source_blob_rls.sql
 0006_revoke_public_access.sql
 0007_semantic_unit_completions.sql
+0008_candidate_batch_completions.sql
 ```
 
 ## Hosted verification

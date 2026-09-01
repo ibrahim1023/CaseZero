@@ -600,29 +600,18 @@ class EvidenceRepository:
                 structural_unit_id, len(items), prompt_hash, completed_at
             )
 
-    async def has_persisted_candidate_run(
-        self,
-        case_id: UUID,
-        structural_unit_ids: tuple[UUID, ...],
-        prompt_hash: str,
+    async def has_completed_candidate_batch(
+        self, case_id: UUID, batch_hash: str, prompt_hash: str
     ) -> bool:
         cursor = await self._connection.execute(
             """
             select 1
-            from public.model_runs as run
-            where run.case_id = %s
-              and run.stage = 'candidates'
-              and run.structural_unit_ids = %s
-              and run.prompt_hash = %s
-              and run.status = 'SUCCEEDED'
-              and (
-                exists (select 1 from public.claim_candidates where model_run_id = run.id)
-                or exists (select 1 from public.entity_candidates where model_run_id = run.id)
-                or exists (select 1 from public.timeline_candidates where model_run_id = run.id)
-              )
-            limit 1
+            from public.candidate_batch_completions completion
+            join public.model_runs run on run.id = completion.model_run_id
+            where completion.case_id = %s and completion.batch_hash = %s
+              and run.prompt_hash = %s and run.status = 'SUCCEEDED'
             """,
-            (case_id, list(structural_unit_ids), prompt_hash),
+            (case_id, batch_hash, prompt_hash),
         )
         return await cursor.fetchone() is not None
 
@@ -642,10 +631,43 @@ class EvidenceRepository:
         return {str(row[0]): int(str(row[1])) for row in await cursor.fetchall()}
 
     async def persist_candidate_batch(
-        self, candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]
+        self,
+        case_id: UUID,
+        structural_unit_ids: tuple[UUID, ...],
+        batch_hash: str,
+        prompt_hash: str,
+        candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
+        completed_at: datetime,
     ) -> None:
         async with self._connection.transaction():
             await self.add_candidates(candidates)
+            await self._connection.execute(
+                """
+                insert into public.candidate_batch_completions (
+                  case_id, batch_hash, model_run_id, candidate_count, completed_at
+                )
+                select %s, %s, id, %s, %s
+                from public.model_runs
+                where case_id = %s and stage = 'candidates'
+                  and structural_unit_ids = %s and prompt_hash = %s
+                  and status = 'SUCCEEDED'
+                order by created_at desc
+                limit 1
+                on conflict (case_id, batch_hash) do update set
+                  model_run_id = excluded.model_run_id,
+                  candidate_count = excluded.candidate_count,
+                  completed_at = excluded.completed_at
+                """,
+                (
+                    case_id,
+                    batch_hash,
+                    len(candidates),
+                    completed_at,
+                    case_id,
+                    list(structural_unit_ids),
+                    prompt_hash,
+                ),
+            )
 
     async def add_candidates(
         self, candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...]

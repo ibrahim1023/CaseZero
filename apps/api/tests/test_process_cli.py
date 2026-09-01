@@ -84,7 +84,8 @@ class Repository:
         self.active_persistence = 0
         self.max_active_persistence = 0
         self.semantic_completion_checks: list[tuple[UUID, str | None]] = []
-        self.candidate_completion_checks: list[tuple[tuple[UUID, ...], str | None]] = []
+        self.candidate_completion_checks: list[tuple[str, str | None]] = []
+        self.candidate_completions: set[str] = set()
         self.skips: list[tuple[UUID, str]] = []
         self.existing_sources: dict[str, object] = {}
 
@@ -149,17 +150,11 @@ class Repository:
         self.semantic_completions.add(structural_unit_id)
         self.active_persistence -= 1
 
-    async def has_persisted_candidate_run(
-        self,
-        case_id: UUID,
-        structural_unit_ids: tuple[UUID, ...],
-        prompt_hash: str | None = None,
+    async def has_completed_candidate_batch(
+        self, case_id: UUID, batch_hash: str, prompt_hash: str | None = None
     ) -> bool:
-        self.candidate_completion_checks.append((structural_unit_ids, prompt_hash))
-        return (
-            ("candidates", structural_unit_ids) in self.successful_model_runs
-            and bool(self.candidates)
-        )
+        self.candidate_completion_checks.append((batch_hash, prompt_hash))
+        return batch_hash in self.candidate_completions
 
     async def get_evidence_items_for_unit(self, unit_id: UUID) -> tuple[EvidenceItem, ...]:
         self.direct_evidence_reads += 1
@@ -185,7 +180,15 @@ class Repository:
         self.direct_candidate_writes += 1
         self.candidates.extend(candidates)
 
-    async def persist_candidate_batch(self, candidates) -> None:
+    async def persist_candidate_batch(
+        self,
+        case_id,
+        structural_unit_ids,
+        batch_hash,
+        prompt_hash,
+        candidates,
+        completed_at,
+    ) -> None:
         self.active_persistence += 1
         self.max_active_persistence = max(
             self.max_active_persistence, self.active_persistence
@@ -193,6 +196,7 @@ class Repository:
         await asyncio.sleep(0.001)
         self.candidate_batch_writes += 1
         self.candidates.extend(candidates)
+        self.candidate_completions.add(batch_hash)
         self.active_persistence -= 1
 
     async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]:

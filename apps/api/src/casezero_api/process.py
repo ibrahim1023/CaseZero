@@ -111,11 +111,8 @@ class CaseProcessingRepository(Protocol):
         completed_at: datetime,
     ) -> None: ...
 
-    async def has_persisted_candidate_run(
-        self,
-        case_id: UUID,
-        structural_unit_ids: tuple[UUID, ...],
-        prompt_hash: str,
+    async def has_completed_candidate_batch(
+        self, case_id: UUID, batch_hash: str, prompt_hash: str
     ) -> bool: ...
 
     async def get_evidence_items_for_unit(
@@ -137,7 +134,12 @@ class CaseProcessingRepository(Protocol):
 
     async def persist_candidate_batch(
         self,
+        case_id: UUID,
+        structural_unit_ids: tuple[UUID, ...],
+        batch_hash: str,
+        prompt_hash: str,
         candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
+        completed_at: datetime,
     ) -> None: ...
 
     async def get_model_usage(self, run_ids: tuple[UUID, ...]) -> dict[str, int]: ...
@@ -190,6 +192,11 @@ def _candidate_batches(
     if current:
         batches.append(tuple(current))
     return tuple(batches)
+
+
+def _candidate_batch_hash(evidence: tuple[EvidenceItem, ...]) -> str:
+    identifiers = "\n".join(sorted(str(item.id) for item in evidence))
+    return hashlib.sha256(identifiers.encode()).hexdigest()
 
 
 class CaseProcessingService:
@@ -421,7 +428,9 @@ class CaseProcessingService:
             ClaimCandidate | EntityCandidate | TimelineCandidate
         ] = []
         reused_candidates = 0
-        pending_candidate_batches: list[tuple[EvidenceItem, ...]] = []
+        pending_candidate_batches: list[
+            tuple[tuple[EvidenceItem, ...], tuple[UUID, ...], str]
+        ] = []
         for batch in _candidate_batches(tuple(evidence), self._candidate_batch_size):
             candidate_unit_ids = tuple(
                 dict.fromkeys(
@@ -430,23 +439,27 @@ class CaseProcessingService:
                     if item.structural_unit_id is not None
                 )
             )
-            if await self._repository.has_persisted_candidate_run(
-                case_id, candidate_unit_ids, CANDIDATE_PROMPT_HASH
+            batch_hash = _candidate_batch_hash(batch)
+            if await self._repository.has_completed_candidate_batch(
+                case_id, batch_hash, CANDIDATE_PROMPT_HASH
             ):
                 reused_candidates += 1
             else:
-                pending_candidate_batches.append(batch)
+                pending_candidate_batches.append(
+                    (batch, candidate_unit_ids, batch_hash)
+                )
 
         candidate_semaphore = asyncio.Semaphore(self._candidate_concurrency)
         completed_candidate_batches = 0
 
         async def propose_batch(
-            batch: tuple[EvidenceItem, ...],
+            pending: tuple[tuple[EvidenceItem, ...], tuple[UUID, ...], str],
         ) -> tuple[
             tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...],
             ProcessingFailure | None,
         ]:
             nonlocal completed_candidate_batches
+            batch, structural_unit_ids, batch_hash = pending
             disposition = (
                 ProcessingDisposition.LOCAL_ONLY
                 if any(
@@ -462,7 +475,14 @@ class CaseProcessingService:
                         case_id, batch, disposition, self._now()
                     )
                 async with persistence_lock:
-                    await self._repository.persist_candidate_batch(proposed)
+                    await self._repository.persist_candidate_batch(
+                        case_id,
+                        structural_unit_ids,
+                        batch_hash,
+                        CANDIDATE_PROMPT_HASH,
+                        proposed,
+                        self._now(),
+                    )
                 return proposed, None
             except (ModelFailure, ModelRoutingDenied, ValueError) as error:
                 return (), ProcessingFailure(

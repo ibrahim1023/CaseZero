@@ -37,6 +37,7 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
     case_id = uuid4()
     document_id = uuid4()
     model_run_id = uuid4()
+    candidate_run_id = uuid4()
     item = DocketItem(
         case_id=case_id,
         title="NTSB examination report",
@@ -149,16 +150,41 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
         )
         assert not await repository.has_completed_semantic_unit(unit.id, "f" * 64)
         assert await repository.get_completed_evidence_items(unit.id, "f" * 64) == ()
+        await connection.execute(
+            """
+            insert into public.model_runs (
+              id, case_id, stage, provider, model, prompt_hash, structural_unit_ids,
+              latency_ms, retry_count, schema_failure_count, status, created_at
+            ) values (%s, %s, 'candidates', 'test', 'test', %s, %s, 1, 0, 0, 'SUCCEEDED', %s)
+            """,
+            (candidate_run_id, case_id, "f" * 64, [unit.id], NOW),
+        )
         candidate = ClaimCandidate(
             case_id=case_id,
             text="Visible source text was reported.",
             status=ClaimStatus.OBSERVED,
             supporting_evidence_ids=(evidence.id,),
             confidence=0.9,
-            model_run_id=model_run_id,
+            model_run_id=candidate_run_id,
             created_at=NOW,
         )
-        await repository.persist_candidate_batch((candidate,))
+        batch_hash = "1" * 64
+        assert not await repository.has_completed_candidate_batch(
+            case_id, batch_hash, "f" * 64
+        )
+        await repository.persist_candidate_batch(
+            case_id, (unit.id,), batch_hash, "f" * 64, (candidate,), NOW
+        )
+        assert await repository.has_completed_candidate_batch(
+            case_id, batch_hash, "f" * 64
+        )
+        empty_batch_hash = "2" * 64
+        await repository.persist_candidate_batch(
+            case_id, (unit.id,), empty_batch_hash, "f" * 64, (), NOW
+        )
+        assert await repository.has_completed_candidate_batch(
+            case_id, empty_batch_hash, "f" * 64
+        )
 
         cursor = await connection.execute(
             """

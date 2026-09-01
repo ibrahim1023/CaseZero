@@ -10,6 +10,7 @@ EXPECTED_TABLES = {
     "evidence_items",
     "model_runs",
     "semantic_unit_completions",
+    "candidate_batch_completions",
 }
 
 
