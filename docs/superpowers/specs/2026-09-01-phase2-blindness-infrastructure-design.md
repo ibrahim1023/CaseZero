@@ -107,9 +107,11 @@ and default-privilege policy established in Phase 1.
 
 ### 4.1 Case cutoff
 
-Add nullable `cases.evidence_cutoff timestamptz` with a constraint requiring UTC
-semantics. It is nullable only for pre-boundary `ACQUIRING` rows and migration of
-existing development data. Database triggers or guarded functions prevent a
+Add nullable `cases.evidence_cutoff timestamptz`. PostgreSQL normalizes the
+stored instant; the Python boundary requires a zero-offset aware datetime and
+the security-definer function sets `TimeZone = 'UTC'` for deterministic text
+operations. It is nullable only for pre-boundary `ACQUIRING` rows and migration
+of existing development data. Database triggers or guarded functions prevent a
 change once a case enters `BLIND`.
 
 RLS fails closed when a blind case has no cutoff. Existing BLIND development
