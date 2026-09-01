@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from casezero_api.repository import AcquisitionRepository, SourceConflictError
+from casezero_api.repository import AcquisitionRepository, CaseStateError, SourceConflictError
 from casezero_evidence import DocumentType, SourceDocument, Visibility
 from casezero_ntsb.models import AircraftMetadata, CaseMetadata
 from psycopg import AsyncConnection
@@ -12,6 +12,7 @@ from pydantic import AnyHttpUrl
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 )
+CUTOFF = datetime(2025, 5, 1, tzinfo=UTC)
 
 
 @pytest.mark.db
@@ -46,20 +47,50 @@ async def test_repository_persists_idempotent_sources_and_marks_case_blind() -> 
 
         await repository.add(document, "aa/" + "a" * 64)
         await repository.add(document, "aa/" + "a" * 64)
-        await repository.mark_blind(case_id)
+        await repository.enter_blind(case_id, CUTOFF)
+        await repository.enter_blind(case_id, CUTOFF)
 
         cursor = await connection.execute(
             """
-            select c.state, count(s.id)
+            select c.state, c.evidence_cutoff, count(s.id)
             from public.cases c
             left join public.source_documents s on s.case_id = c.id
             where c.id = %s
-            group by c.state
+            group by c.state, c.evidence_cutoff
             """,
             (case_id,),
         )
-        assert await cursor.fetchone() == ("BLIND", 1)
+        assert await cursor.fetchone() == ("BLIND", CUTOFF, 1)
 
         changed = document.model_copy(update={"id": uuid4(), "checksum": "b" * 64})
         with pytest.raises(SourceConflictError):
             await repository.add(changed, "bb/" + "b" * 64)
+
+
+@pytest.mark.db
+@pytest.mark.skipif(os.getenv("CASEZERO_DB_TEST") != "1", reason="requires CASEZERO_DB_TEST=1")
+@pytest.mark.asyncio
+async def test_enter_blind_backfills_once_and_preserves_cutoff_after_conflict() -> None:
+    case_id = uuid4()
+    async with (
+        await AsyncConnection.connect(DATABASE_URL) as connection,
+        connection.transaction(force_rollback=True),
+    ):
+        await connection.execute(
+            "insert into public.cases (id, ntsb_number, title, state) values (%s, %s, %s, 'BLIND')",
+            (case_id, f"TEST-{case_id.hex[:12]}", "Migrated fixture"),
+        )
+        repository = AcquisitionRepository(connection)
+
+        await repository.enter_blind(case_id, CUTOFF)
+        with pytest.raises(CaseStateError):
+            await repository.enter_blind(
+                case_id, datetime(2025, 5, 2, tzinfo=UTC)
+            )
+
+        cutoff = await (
+            await connection.execute(
+                "select evidence_cutoff from public.cases where id = %s", (case_id,)
+            )
+        ).fetchone()
+        assert cutoff == (CUTOFF,)

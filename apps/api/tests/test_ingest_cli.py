@@ -32,14 +32,14 @@ class CaseLookup:
 
 class CaseRepository:
     def __init__(self) -> None:
-        self.marked_blind: list[UUID] = []
+        self.entered_blind: list[tuple[UUID, datetime]] = []
 
     async def upsert_case(self, metadata: CaseMetadata) -> UUID:
         assert metadata.ntsb_number == "CEN25LA167"
         return CASE_ID
 
-    async def mark_blind(self, case_id: UUID) -> None:
-        self.marked_blind.append(case_id)
+    async def enter_blind(self, case_id: UUID, evidence_cutoff: datetime) -> None:
+        self.entered_blind.append((case_id, evidence_cutoff))
 
 
 class Downloader:
@@ -99,7 +99,7 @@ async def test_ingest_service_completes_case_with_explicit_partial_failures() ->
     assert summary.documents_fetched == 1
     assert summary.visibility_counts == {"INVESTIGATION_EVIDENCE": 1}
     assert summary.retrieval_errors == 1
-    assert repository.marked_blind == [CASE_ID]
+    assert repository.entered_blind == [(CASE_ID, CUTOFF)]
 
 
 def test_ingest_cli_reports_partial_errors_without_failing(

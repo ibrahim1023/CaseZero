@@ -16,7 +16,7 @@ class CaseLookup(Protocol):
 class CaseRepository(Protocol):
     async def upsert_case(self, metadata: CaseMetadata) -> UUID: ...
 
-    async def mark_blind(self, case_id: UUID) -> None: ...
+    async def enter_blind(self, case_id: UUID, evidence_cutoff: datetime) -> None: ...
 
 
 class ManifestDownloader(Protocol):
@@ -63,7 +63,7 @@ class IngestService:
         metadata = await self._case_lookup.get_case(ntsb_number)
         case_id = await self._repository.upsert_case(metadata)
         result = await self._downloader.download_manifest(case_id, manifest, cutoff=cutoff)
-        await self._repository.mark_blind(case_id)
+        await self._repository.enter_blind(case_id, cutoff)
         counts = Counter(document.visibility.value for document in result.documents)
         return IngestSummary(
             ntsb_number=ntsb_number,

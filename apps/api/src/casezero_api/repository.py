@@ -1,9 +1,11 @@
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from casezero_evidence import SourceDocument
 from casezero_ntsb.models import CaseMetadata
 from psycopg import AsyncConnection
+from psycopg.errors import RaiseException
 from psycopg.types.json import Jsonb
 
 
@@ -98,15 +100,19 @@ class AcquisitionRepository:
                 f"source {document.source_url} changed after its first ingestion"
             )
 
-    async def mark_blind(self, case_id: UUID) -> None:
-        cursor = await self._connection.execute(
-            """
-            update public.cases
-            set state = 'BLIND'
-            where id = %s and state in ('ACQUIRING', 'BLIND')
-            returning id
-            """,
-            (case_id,),
-        )
-        if await cursor.fetchone() is None:
-            raise CaseStateError("case cannot transition to BLIND")
+    async def enter_blind(self, case_id: UUID, evidence_cutoff: datetime) -> None:
+        if (
+            evidence_cutoff.tzinfo is None
+            or evidence_cutoff.utcoffset() != timedelta(0)
+        ):
+            raise ValueError("evidence cutoff must be UTC-aware")
+        try:
+            async with self._connection.transaction():
+                cursor = await self._connection.execute(
+                    "select public.enter_blind(%s, %s)",
+                    (case_id, evidence_cutoff),
+                )
+                if await cursor.fetchone() != (case_id,):
+                    raise CaseStateError("case cannot enter BLIND with this cutoff")
+        except RaiseException as error:
+            raise CaseStateError("case cannot enter BLIND with this cutoff") from error
