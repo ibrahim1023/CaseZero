@@ -51,8 +51,8 @@ from casezero_observability import (
     ModelRoutingDenied,
     PydanticReasoningModel,
 )
-from psycopg import AsyncConnection
 
+from casezero_api.session import RuntimeRole, role_scoped_connection
 from casezero_api.settings import HostedSettings
 
 EVIDENCE_PROMPT_HASH = hashlib.sha256(EVIDENCE_PROMPT_TEMPLATE.encode()).hexdigest()
@@ -599,8 +599,8 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
     settings = HostedSettings.from_environment()
     manifest = load_reference_manifest(ntsb_number)
     with httpx.Client() as storage_client:
-        async with await AsyncConnection.connect(
-            settings.database_url.get_secret_value(), autocommit=True
+        async with role_scoped_connection(
+            settings.database_url.get_secret_value(), RuntimeRole.PROCESSOR
         ) as connection:
             source_store = SupabaseSourceStore(
                 settings.supabase_url,
