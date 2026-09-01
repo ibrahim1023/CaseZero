@@ -25,6 +25,7 @@ from casezero_ingestion.orchestrator import StructuralProcessingResult
 from casezero_ingestion.report import ProcessingFailure, ProcessingReport
 from casezero_ingestion.semantic import EVIDENCE_PROMPT_TEMPLATE
 from casezero_ntsb.curation import CuratedCaseManifest
+from casezero_observability import ModelFailure
 from typer.testing import CliRunner
 
 CASE_ID = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
@@ -569,6 +570,64 @@ async def test_candidate_batch_without_persisted_candidates_is_retried(tmp_path:
     await service.process_case("CEN22FA375", curated_manifest(), downloads)
 
     assert candidates.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_candidate_stage_waits_for_all_semantic_units(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    (downloads / "01.txt").write_bytes(b"source 1")
+    repository = Repository()
+
+    class TwoUnits:
+        async def process_with_units(self, sources):
+            source = sources[0]
+            units = tuple(
+                StructuralUnit(
+                    derived_artifact_id=uuid4(),
+                    source_document_id=source.document.id,
+                    kind=StructuralUnitKind.TEXT_BLOCK,
+                    ordinal=index,
+                    content_checksum=hashlib.sha256(f"unit-{index}".encode()).hexdigest(),
+                    locator=TextLocator(start=0, end=len(source.data)),
+                    payload={"text": source.data.decode()},
+                )
+                for index in range(2)
+            )
+            return StructuralProcessingResult(
+                ProcessingReport(status_counts={"SUCCEEDED": 1}, artifacts=1, structural_units=2),
+                units,
+            )
+
+    class PartialSemantic(SemanticInterpreter):
+        async def interpret(self, case_id, unit, disposition):
+            if unit.ordinal == 1:
+                raise ModelFailure("retryable fixture failure")
+            return await super().interpret(case_id, unit, disposition)
+
+    class CountingCandidates:
+        def __init__(self):
+            self.calls = 0
+
+        async def propose(self, case_id, evidence, disposition, created_at):
+            self.calls += 1
+            return ()
+
+    candidates = CountingCandidates()
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=LocalSourceStore(tmp_path / "sources"),
+        structural_orchestrator=TwoUnits(),
+        semantic_interpreter=PartialSemantic([]),
+        candidate_proposer=candidates,
+        now=lambda: NOW,
+    )
+
+    report = await service.process_case("CEN22FA375", curated_manifest(), downloads)
+
+    assert candidates.calls == 0
+    assert [failure.stage for failure in report.failures] == ["semantic", "candidates"]
+    assert report.candidates == 0
 
 
 @pytest.mark.asyncio

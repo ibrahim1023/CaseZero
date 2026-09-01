@@ -393,6 +393,30 @@ class CaseProcessingService:
                 item.model_run_id for item in interpreted if item.model_run_id is not None
             )
 
+        if any(failure.stage == "semantic" for failure in failures):
+            failures.append(
+                ProcessingFailure(
+                    stage="candidates",
+                    error_type="Deferred",
+                    message="candidate stage deferred until all semantic units succeed",
+                    retryable=True,
+                )
+            )
+            model_usage = await self._repository.get_model_usage(tuple(model_run_ids))
+            return _compose_report(
+                manifest,
+                dispositions,
+                statuses,
+                structural.report,
+                failures,
+                evidence_items=len(new_evidence),
+                review_pending=sum(
+                    item.review_status is ReviewStatus.PENDING for item in new_evidence
+                ),
+                model_usage=model_usage,
+                reused_semantic_runs=reused_semantic,
+            )
+
         new_candidates: list[
             ClaimCandidate | EntityCandidate | TimelineCandidate
         ] = []
