@@ -1,10 +1,14 @@
 begin;
 
+create extension if not exists pgtap with schema extensions;
 select plan(5);
 select extensions.has_table('public', 'processing_skips', 'rights skips have an audit table');
 
-insert into public.cases (id, ntsb_number, title, state)
-values ('10000000-0000-0000-0000-000000000001', 'TEST-PHASE1', 'Fixture', 'BLIND');
+insert into public.cases (id, ntsb_number, title, state, evidence_cutoff)
+values (
+  '10000000-0000-0000-0000-000000000001', 'TEST-PHASE1', 'Fixture',
+  'BLIND', '2025-05-01 00:00:00+00'
+);
 
 insert into public.docket_items (
   id, case_id, title, source_url, rights_status, processing_disposition,
@@ -22,15 +26,16 @@ values (repeat('a', 64), 'aa/' || repeat('a', 64), 10),
        (repeat('b', 64), 'bb/' || repeat('b', 64), 20);
 
 insert into public.source_documents (
-  id, case_id, docket_item_id, blob_checksum, title, source_url, retrieved_at,
-  document_type, visibility, checksum, storage_path
+  id, case_id, docket_item_id, blob_checksum, title, source_url, published_at,
+  retrieved_at, document_type, visibility, checksum, storage_path
 ) values
   ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
    '20000000-0000-0000-0000-000000000001', repeat('a', 64), 'Factual report',
-   'https://data.ntsb.gov/factual.pdf', now(), 'FACTUAL_REPORT', 'INVESTIGATION_EVIDENCE',
-   repeat('a', 64), 'aa/' || repeat('a', 64)),
+   'https://data.ntsb.gov/factual.pdf', '2025-05-01 00:00:00+00', now(),
+   'FACTUAL_REPORT', 'INVESTIGATION_EVIDENCE', repeat('a', 64), 'aa/' || repeat('a', 64)),
   ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001',
-   null, repeat('b', 64), 'Final report', 'https://data.ntsb.gov/final.pdf', now(),
+   '20000000-0000-0000-0000-000000000002', repeat('b', 64), 'Final report',
+   'https://data.ntsb.gov/final.pdf', '2025-05-01 00:00:00+00', now(),
    'FINAL_REPORT', 'FINAL_FINDING', repeat('b', 64), 'bb/' || repeat('b', 64));
 
 create temporary table processor_observation (
@@ -61,8 +66,8 @@ select extensions.is(
   'processor sees only investigation evidence sources'
 );
 select extensions.is(
-  (select docket_count from processor_observation), 1,
-  'processor sees only processable docket inventory'
+  (select docket_count from processor_observation), 2,
+  'processor sees full reviewed docket metadata for skip auditing'
 );
 select extensions.is(
   (select inserted_runs from processor_observation), 1,

@@ -15,10 +15,13 @@ from casezero_evidence import (
     ExtractionMethod,
     ProcessingDisposition,
     ReviewStatus,
+    SourceDocument,
     StructuralUnit,
     StructuralUnitKind,
     TextLocator,
+    Visibility,
 )
+from casezero_evidence.repository import StoredSourceRecord
 from casezero_evidence.source_store import LocalSourceStore
 from casezero_ingestion.candidates import CANDIDATE_PROMPT_TEMPLATE
 from casezero_ingestion.orchestrator import StructuralProcessingResult
@@ -362,6 +365,42 @@ async def test_ai_allowed_final_report_is_blocked_before_materialization(tmp_pat
         for _, status, reason in repository.skips
     )
     assert report.failures == ()
+
+
+@pytest.mark.asyncio
+async def test_existing_eligible_source_is_not_relinked(tmp_path: Path) -> None:
+    data = b"source 1"
+    repository = Repository()
+    store = LocalSourceStore(tmp_path / "sources")
+    stored = store.put(CASE_ID, "01.txt", data)
+    first = curated_manifest().items[0]
+    document = SourceDocument(
+        case_id=CASE_ID,
+        title=first.title,
+        source_url=first.source_url,
+        published_at=first.published_at,
+        retrieved_at=NOW,
+        document_type=first.document_type,
+        visibility=Visibility.INVESTIGATION_EVIDENCE,
+        checksum=hashlib.sha256(data).hexdigest(),
+    )
+    repository.existing_sources[str(first.source_url)] = StoredSourceRecord(
+        document=document,
+        storage_path=stored.storage_path.as_posix(),
+    )
+    service = CaseProcessingService(
+        repository=repository,
+        source_store=store,
+        structural_orchestrator=StructuralOrchestrator([]),
+        semantic_interpreter=SemanticInterpreter([]),
+        candidate_proposer=CandidateProposer([], repository),
+        now=lambda: NOW,
+    )
+
+    report = await service.process_case("CEN22FA375", curated_manifest(), None)
+
+    assert repository.documents == []
+    assert report.status_counts == {"SKIPPED_RIGHTS": 2, "SUCCEEDED": 1}
 
 
 @pytest.mark.asyncio

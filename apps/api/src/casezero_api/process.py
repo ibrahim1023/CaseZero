@@ -562,22 +562,23 @@ class CaseProcessingService:
         checksum = hashlib.sha256(data).hexdigest()
         if checksum != curated_item.expected_checksum:
             raise ValueError(f"eligible source checksum mismatch for item {index:02d}")
-        stored = self._source_store.put(case_id, f"{index:02d}.{suffix}", data)
         if existing is not None:
             if existing.document.checksum != checksum:
                 raise ValueError(f"stored source checksum mismatch for item {index:02d}")
-            document = existing.document
-        else:
-            document = SourceDocument(
-                case_id=case_id,
-                title=curated_item.title,
-                source_url=curated_item.source_url,
-                published_at=curated_item.published_at,
-                retrieved_at=retrieved_at,
-                document_type=curated_item.document_type or DocumentType.OTHER,
-                visibility=visibility,
-                checksum=checksum,
+            return ProcessingSource(
+                docket_item=docket_item, document=existing.document, data=data
             )
+        stored = self._source_store.put(case_id, f"{index:02d}.{suffix}", data)
+        document = SourceDocument(
+            case_id=case_id,
+            title=curated_item.title,
+            source_url=curated_item.source_url,
+            published_at=curated_item.published_at,
+            retrieved_at=retrieved_at,
+            document_type=curated_item.document_type or DocumentType.OTHER,
+            visibility=visibility,
+            checksum=checksum,
+        )
         await self._repository.link_source_document(
             document,
             docket_item_id,
