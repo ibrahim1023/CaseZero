@@ -27,8 +27,9 @@ security and state-transition contracts those phases must use.
   content-addressed Storage buckets.
 - Enforce visibility and lifecycle in Postgres RLS and atomic database
   functions, not application filters or prompt instructions.
-- Use role-scoped transactions with `SET LOCAL ROLE` for blind and evaluation
-  reads. Runtime role names are fixed enums, never user input.
+- Use dedicated, non-pooled role-scoped connections with allowlisted `SET ROLE`
+  for processor, blind, and evaluation operations. Runtime role names are fixed
+  enums, never user input.
 - Implement the immutable lock contract now against a versioned canonical
   assessment snapshot. Phase 5 supplies the typed `FinalAssessment` without
   changing the lock boundary.
@@ -59,9 +60,11 @@ before the case cutoff. After lock, source, artifact, model, evidence, completio
 and candidate writes are denied.
 
 The hosted Python connection may authenticate as the backend Postgres user, but
-processor operations execute inside a transaction that applies
-`SET LOCAL ROLE casezero_processor`. No processor repository method may rely on
-the backend user's RLS bypass.
+processor operations use a dedicated non-pooled connection that applies
+`SET ROLE casezero_processor` before constructing the repository. Short reads
+and independently committed unit/batch transactions therefore all execute under
+RLS. The context resets the role and closes the connection on exit; no processor
+repository method may rely on the backend user's RLS bypass.
 
 ### 3.3 Blind investigation
 
@@ -197,7 +200,8 @@ prompt_versions, system_version)` is owned by the trusted migration owner,
 uses `SECURITY DEFINER`, schema-qualifies every object, and sets
 `search_path = pg_catalog, public`. `PUBLIC`, acquisition, processor, and
 evaluation execution are revoked; only `casezero_blind` receives `EXECUTE`.
-The backend must enter a role-scoped blind transaction before calling it.
+The backend must call it through a dedicated connection already scoped with
+`SET ROLE casezero_blind`.
 
 The function executes as one database transaction:
 
@@ -246,13 +250,16 @@ to prove Phase 2.
 
 ### 6.1 Role-scoped database session
 
-Add a small backend context manager that starts a transaction, executes one
-allowlisted `SET LOCAL ROLE`, and yields the existing typed repository. It
-always rolls back role state when the transaction exits. Callers cannot provide
-an arbitrary role string.
+Add a small backend context manager that opens a dedicated non-pooled
+connection, executes one allowlisted `SET ROLE` using a fixed SQL identifier,
+and yields the typed repository. On exit it executes `RESET ROLE` when possible
+and always closes the connection. Callers cannot provide an arbitrary role
+string, and role-scoped connections are never returned to a pool.
 
-Acquisition administration remains a separate composition path. Blind and
-evaluation services cannot receive an unscoped `EvidenceRepository`.
+This session-level role scope allows each semantic unit or candidate batch to
+commit independently without reverting to backend-owner privileges between
+transactions. Acquisition administration remains a separate composition path.
+Blind and evaluation services cannot receive an unscoped `EvidenceRepository`.
 
 ### 6.2 Blind access service
 
