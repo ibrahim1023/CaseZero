@@ -176,6 +176,9 @@ async def test_repository_persists_idempotent_processing_graph() -> None:
         assert await repository.get_completed_evidence_items(unit.id, "e" * 64) == (
             evidence,
         )
+        assert await repository.list_active_evidence(case_id) == (evidence,)
+        assert await repository.get_active_evidence(case_id, evidence.id) == evidence
+        assert await repository.get_active_evidence(case_id, uuid4()) is None
         assert not await repository.has_completed_semantic_unit(unit.id, "f" * 64)
         assert await repository.get_completed_evidence_items(unit.id, "f" * 64) == ()
         await connection.execute(

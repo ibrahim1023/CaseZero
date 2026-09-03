@@ -89,6 +89,7 @@ class Repository:
         self.semantic_completion_checks: list[tuple[UUID, str | None]] = []
         self.candidate_completion_checks: list[tuple[str, str | None]] = []
         self.candidate_completions: set[str] = set()
+        self.processable_links: list[tuple[UUID, UUID, str, str]] = []
         self.skips: list[tuple[UUID, str, str]] = []
         self.existing_sources: dict[str, object] = {}
 
@@ -98,6 +99,17 @@ class Repository:
     async def upsert_docket_item(self, item):
         self.docket_items.append(item)
         return item.id
+
+    async def link_processable_source(
+        self,
+        case_id: UUID,
+        docket_item_id: UUID,
+        source_url: str,
+        expected_checksum: str,
+    ) -> None:
+        self.processable_links.append(
+            (case_id, docket_item_id, source_url, expected_checksum)
+        )
 
     async def record_processing_skip(
         self, docket_item_id: UUID, status: str, reason: str, created_at: datetime
@@ -400,6 +412,11 @@ async def test_existing_eligible_source_is_not_relinked(tmp_path: Path) -> None:
     report = await service.process_case("CEN22FA375", curated_manifest(), None)
 
     assert repository.documents == []
+    assert len(repository.processable_links) == 1
+    assert repository.processable_links[0][2:] == (
+        str(first.source_url),
+        first.expected_checksum,
+    )
     assert report.status_counts == {"SKIPPED_RIGHTS": 2, "SUCCEEDED": 1}
 
 

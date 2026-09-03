@@ -157,6 +157,21 @@ class EvidenceRepository:
             raise RuntimeError("docket item upsert returned no id")
         return row[0]
 
+    async def link_processable_source(
+        self,
+        case_id: UUID,
+        docket_item_id: UUID,
+        source_url: str,
+        expected_checksum: str,
+    ) -> None:
+        cursor = await self._connection.execute(
+            "select public.link_processable_source(%s, %s, %s, %s)",
+            (case_id, docket_item_id, source_url, expected_checksum),
+        )
+        row = await cursor.fetchone()
+        if row is None or not isinstance(row[0], UUID):
+            raise EvidencePersistenceConflict("processable source could not be linked")
+
     async def link_source_document(
         self,
         document: SourceDocument,
@@ -509,6 +524,43 @@ class EvidenceRepository:
         )
         rows = await cursor.fetchall()
         return tuple(EvidenceItem.model_validate(row[0], strict=False) for row in rows)
+
+    async def list_active_evidence(
+        self, case_id: UUID
+    ) -> tuple[EvidenceItem, ...]:
+        cursor = await self._connection.execute(
+            """
+            select evidence.item
+            from public.semantic_unit_completions completion
+            join public.evidence_items evidence
+              on evidence.structural_unit_id = completion.structural_unit_id
+             and evidence.model_run_id = completion.model_run_id
+            where evidence.case_id = %s
+            order by evidence.id
+            """,
+            (case_id,),
+        )
+        return tuple(
+            EvidenceItem.model_validate(row[0], strict=False)
+            for row in await cursor.fetchall()
+        )
+
+    async def get_active_evidence(
+        self, case_id: UUID, evidence_id: UUID
+    ) -> EvidenceItem | None:
+        cursor = await self._connection.execute(
+            """
+            select evidence.item
+            from public.semantic_unit_completions completion
+            join public.evidence_items evidence
+              on evidence.structural_unit_id = completion.structural_unit_id
+             and evidence.model_run_id = completion.model_run_id
+            where evidence.case_id = %s and evidence.id = %s
+            """,
+            (case_id, evidence_id),
+        )
+        row = await cursor.fetchone()
+        return EvidenceItem.model_validate(row[0], strict=False) if row else None
 
     async def record_model_run(
         self,

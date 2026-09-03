@@ -9,8 +9,12 @@ from casezero_evidence import (
     AccessOperation,
     AuditReasonCode,
     DocumentType,
+    EvidenceItem,
+    EvidenceType,
+    ExtractionMethod,
     RuntimeActor,
     SourceDocument,
+    TextLocator,
     Visibility,
     WorkflowStage,
 )
@@ -32,8 +36,13 @@ NOW = datetime(2026, 9, 1, tzinfo=UTC)
 
 
 class Reader:
-    def __init__(self, document: SourceDocument | None) -> None:
+    def __init__(
+        self,
+        document: SourceDocument | None,
+        evidence: tuple[EvidenceItem, ...] = (),
+    ) -> None:
         self.document = document
+        self.evidence = evidence
 
     async def get_source_document_by_id(
         self, case_id: UUID, document_id: UUID
@@ -41,6 +50,16 @@ class Reader:
         assert case_id == CASE_ID
         assert document_id == DOCUMENT_ID
         return self.document
+
+    async def list_active_evidence(self, case_id: UUID) -> tuple[EvidenceItem, ...]:
+        assert case_id == CASE_ID
+        return self.evidence
+
+    async def get_active_evidence(
+        self, case_id: UUID, evidence_id: UUID
+    ) -> EvidenceItem | None:
+        assert case_id == CASE_ID
+        return next((item for item in self.evidence if item.id == evidence_id), None)
 
 
 class Recorder:
@@ -62,6 +81,20 @@ def document() -> SourceDocument:
         document_type=DocumentType.FACTUAL_REPORT,
         visibility=Visibility.INVESTIGATION_EVIDENCE,
         checksum="a" * 64,
+    )
+
+
+def evidence() -> EvidenceItem:
+    return EvidenceItem(
+        case_id=CASE_ID,
+        source_document_id=DOCUMENT_ID,
+        structural_unit_id=uuid4(),
+        model_run_id=uuid4(),
+        type=EvidenceType.TEXT,
+        observation="Grounded observation",
+        source_locator=TextLocator(start=0, end=8),
+        extraction_method=ExtractionMethod.AI,
+        confidence=0.9,
     )
 
 
@@ -92,6 +125,37 @@ async def test_blind_source_read_denies_without_revealing_metadata() -> None:
     assert recorder.events[0].allowed is False
     assert recorder.events[0].reason_code is AuditReasonCode.BLOCKED_DOCUMENT
     assert recorder.events[0].target_document_id == DOCUMENT_ID
+
+
+@pytest.mark.asyncio
+async def test_blind_service_lists_and_gets_only_reader_active_evidence() -> None:
+    item = evidence()
+    recorder = Recorder()
+    service = BlindAccessService(
+        Reader(document(), (item,)), recorder, now=lambda: NOW
+    )
+
+    listed = await service.list_active_evidence(CASE_ID)
+    selected = await service.get_evidence(CASE_ID, item.id)
+
+    assert listed == (item,)
+    assert selected == item
+    assert recorder.events[0].capability is AccessCapability.SUPABASE_DATABASE
+    assert recorder.events[0].target_document_id is None
+    assert recorder.events[1].capability is AccessCapability.EVIDENCE_READ
+    assert recorder.events[1].target_document_id == DOCUMENT_ID
+
+
+@pytest.mark.asyncio
+async def test_blind_service_denies_unknown_evidence_without_identifier_leak() -> None:
+    recorder = Recorder()
+    service = BlindAccessService(Reader(document()), recorder, now=lambda: NOW)
+
+    with pytest.raises(BlindAccessDenied, match="blind access denied"):
+        await service.get_evidence(CASE_ID, uuid4())
+
+    assert recorder.events[0].operation is AccessOperation.DENY
+    assert recorder.events[0].target_document_id is None
 
 
 class Cursor:

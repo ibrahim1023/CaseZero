@@ -73,6 +73,14 @@ class CaseProcessingRepository(Protocol):
 
     async def upsert_docket_item(self, item: DocketItem) -> UUID: ...
 
+    async def link_processable_source(
+        self,
+        case_id: UUID,
+        docket_item_id: UUID,
+        source_url: str,
+        expected_checksum: str,
+    ) -> None: ...
+
     async def record_processing_skip(
         self, docket_item_id: UUID, status: str, reason: str, created_at: datetime
     ) -> None: ...
@@ -299,7 +307,17 @@ class CaseProcessingService:
                 )
                 statuses["SKIPPED_VISIBILITY"] += 1
                 continue
+            if curated_item.expected_checksum is None:
+                raise ProcessCaseError(
+                    f"eligible source checksum is missing for item {index:02d}"
+                )
             try:
+                await self._repository.link_processable_source(
+                    case_id,
+                    docket_item_id,
+                    str(curated_item.source_url),
+                    curated_item.expected_checksum,
+                )
                 source = await self._materialize_source(
                     case_id,
                     index,
