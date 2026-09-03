@@ -44,7 +44,10 @@ CASEZERO_LIVE=1 uv run pytest -m live -v    # real NTSB / Context.dev / Hyperfus
 ```
 
 Hosted checks require an explicitly non-production Supabase project. Local
-Supabase/Docker is not a runtime or required verification dependency.
+Supabase/Docker is not a runtime or required verification dependency. When
+Docker is unavailable, execute each `supabase/tests/*.sql` file transactionally
+through `psql -v ON_ERROR_STOP=1` against the non-production session pooler and
+confirm every pgTAP assertion reports `ok`.
 
 ## Loop 5 — Before anything becomes public
 
