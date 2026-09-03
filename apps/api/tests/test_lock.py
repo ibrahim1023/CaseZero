@@ -105,6 +105,8 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
     case_id = uuid4()
     docket_id = uuid4()
     source_id = uuid4()
+    official_docket_id = uuid4()
+    official_source_id = uuid4()
     processing_run_id = uuid4()
     artifact_id = uuid4()
     unit_id = uuid4()
@@ -155,6 +157,41 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
                 NOW,
                 "a" * 64,
                 f"phase2/{case_id}",
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.docket_items (
+              id, case_id, title, source_url, document_type, rights_status,
+              processing_disposition, attribution, review_note, reviewed_at
+            ) values (%s, %s, 'Final Report', %s, 'FINAL_REPORT', 'NTSB_AUTHORED',
+                      'LINK_ONLY', 'Source: National Transportation Safety Board',
+                      'fixture', %s)
+            """,
+            (
+                official_docket_id,
+                case_id,
+                f"https://data.ntsb.gov/{case_id}-final.pdf",
+                NOW,
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.source_documents (
+              id, case_id, docket_item_id, title, source_url, published_at,
+              retrieved_at, document_type, visibility, checksum, storage_path
+            ) values (%s, %s, %s, 'Final Report', %s, %s, %s, 'FINAL_REPORT',
+                      'FINAL_FINDING', %s, %s)
+            """,
+            (
+                official_source_id,
+                case_id,
+                official_docket_id,
+                f"https://data.ntsb.gov/{case_id}-final.pdf",
+                NOW,
+                NOW,
+                "f" * 64,
+                f"phase2/{case_id}-final",
             ),
         )
         await connection.execute(
@@ -249,6 +286,32 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
                 system_version="phase2-test",
             )
         await connection.execute("reset role")
+
+        await connection.execute("set local role casezero_blind")
+        blind_official_count = await (
+            await connection.execute(
+                """
+                select count(*) from public.source_documents
+                where case_id = %s and visibility = 'FINAL_FINDING'
+                """,
+                (case_id,),
+            )
+        ).fetchone()
+        await connection.execute("reset role")
+        await connection.execute("set local role casezero_eval")
+        evaluation_official_count = await (
+            await connection.execute(
+                """
+                select count(*) from public.source_documents
+                where case_id = %s and visibility = 'FINAL_FINDING'
+                """,
+                (case_id,),
+            )
+        ).fetchone()
+        await connection.execute("reset role")
+
+        assert blind_official_count == (0,)
+        assert evaluation_official_count == (1,)
 
         with pytest.raises(DatabaseError):
             async with connection.transaction():
