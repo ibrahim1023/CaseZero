@@ -112,6 +112,11 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
     unit_id = uuid4()
     model_run_id = uuid4()
     evidence_id = uuid4()
+    official_processing_run_id = uuid4()
+    official_artifact_id = uuid4()
+    official_unit_id = uuid4()
+    official_model_run_id = uuid4()
+    official_evidence_id = uuid4()
     snapshot = AssessmentSnapshot(
         schema_version="phase2-lock-contract-v1",
         assessment_kind="fixture",
@@ -265,6 +270,93 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
             """,
             (unit_id, model_run_id, NOW),
         )
+        await connection.execute(
+            """
+            insert into public.processing_runs (
+              id, source_document_id, source_checksum, processor_name,
+              processor_version, configuration_hash, status, started_at, completed_at
+            ) values (%s, %s, %s, 'fixture', '1.0.0', %s, 'SUCCEEDED', %s, %s)
+            """,
+            (
+                official_processing_run_id,
+                official_source_id,
+                "f" * 64,
+                "1" * 64,
+                NOW,
+                NOW,
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.derived_artifacts (
+              id, processing_run_id, source_document_id, kind, checksum,
+              storage_path, media_type, byte_size, created_at
+            ) values (%s, %s, %s, 'DOCUMENT_STRUCTURE', %s, %s,
+                      'application/json', 1, %s)
+            """,
+            (
+                official_artifact_id,
+                official_processing_run_id,
+                official_source_id,
+                "2" * 64,
+                f"phase2/{official_artifact_id}",
+                NOW,
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.structural_units (
+              id, derived_artifact_id, source_document_id, kind, ordinal,
+              content_checksum, locator, payload
+            ) values (%s, %s, %s, 'TEXT_BLOCK', 0, %s, %s, %s)
+            """,
+            (
+                official_unit_id,
+                official_artifact_id,
+                official_source_id,
+                "3" * 64,
+                Jsonb({"kind": "text", "start": 0, "end": 8}),
+                Jsonb({"text": "official"}),
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.model_runs (
+              id, case_id, stage, provider, model, prompt_hash,
+              structural_unit_ids, latency_ms, retry_count,
+              schema_failure_count, status, created_at
+            ) values (%s, %s, 'evidence', 'hyperfusion', 'fixture', %s,
+                      %s, 1, 0, 0, 'SUCCEEDED', %s)
+            """,
+            (official_model_run_id, case_id, "4" * 64, [official_unit_id], NOW),
+        )
+        await connection.execute(
+            """
+            insert into public.evidence_items (
+              id, case_id, source_document_id, structural_unit_id,
+              model_run_id, item, review_status, created_at
+            ) values (%s, %s, %s, %s, %s, %s, 'NOT_REQUIRED', %s)
+            """,
+            (
+                official_evidence_id,
+                case_id,
+                official_source_id,
+                official_unit_id,
+                official_model_run_id,
+                Jsonb(
+                    {"id": str(official_evidence_id), "observation": "official"}
+                ),
+                NOW,
+            ),
+        )
+        await connection.execute(
+            """
+            insert into public.semantic_unit_completions (
+              structural_unit_id, model_run_id, evidence_count, completed_at
+            ) values (%s, %s, 1, %s)
+            """,
+            (official_unit_id, official_model_run_id, NOW),
+        )
 
         await connection.execute("set local role casezero_blind")
         service = InvestigationLockService(
@@ -347,6 +439,42 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
                 (case_id,),
             )
         ).fetchone()
+        expected_evidence_hash = await (
+            await connection.execute(
+                """
+                select encode(
+                  extensions.digest(
+                    convert_to(
+                      jsonb_agg(
+                        jsonb_build_object(
+                          'evidence_id', evidence.id,
+                          'item', evidence.item,
+                          'model_run_id', semantic_run.id,
+                          'prompt_hash', semantic_run.prompt_hash,
+                          'structural_unit_id', unit.id,
+                          'content_checksum', unit.content_checksum,
+                          'source_document_id', source.id,
+                          'source_checksum', source.checksum
+                        ) order by evidence.id
+                      )::text,
+                      'UTF8'
+                    ),
+                    'sha256'
+                  ),
+                  'hex'
+                )
+                from public.semantic_unit_completions completion
+                join public.model_runs semantic_run on semantic_run.id = completion.model_run_id
+                join public.evidence_items evidence
+                  on evidence.model_run_id = completion.model_run_id
+                 and evidence.structural_unit_id = completion.structural_unit_id
+                join public.structural_units unit on unit.id = evidence.structural_unit_id
+                join public.source_documents source on source.id = evidence.source_document_id
+                where source.id = %s
+                """,
+                (source_id,),
+            )
+        ).fetchone()
         canonical_hash = await (
             await connection.execute(
                 """
@@ -371,5 +499,6 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
         assert audit_count == (1,)
         assert lock.assessment_snapshot == snapshot
         assert canonical_hash == (lock.assessment_hash,)
+        assert expected_evidence_hash == (lock.evidence_set_hash,)
         assert len(lock.assessment_hash) == 64
         assert len(lock.evidence_set_hash) == 64
