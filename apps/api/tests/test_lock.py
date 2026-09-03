@@ -10,6 +10,7 @@ from casezero_api.lock import (
 )
 from casezero_evidence import AssessmentSnapshot, InvestigationLock
 from psycopg import AsyncConnection
+from psycopg.errors import DatabaseError
 from psycopg.types.json import Jsonb
 
 DATABASE_URL = os.getenv(
@@ -248,6 +249,31 @@ async def test_database_lock_is_atomic_immutable_snapshot_transition() -> None:
                 system_version="phase2-test",
             )
         await connection.execute("reset role")
+
+        with pytest.raises(DatabaseError):
+            async with connection.transaction():
+                await connection.execute(
+                    "update public.investigation_locks set system_version = 'changed' where case_id = %s",
+                    (case_id,),
+                )
+        with pytest.raises(DatabaseError):
+            async with connection.transaction():
+                await connection.execute(
+                    "update public.cases set evidence_cutoff = %s where id = %s",
+                    (datetime(2026, 9, 2, tzinfo=UTC), case_id),
+                )
+        with pytest.raises(DatabaseError):
+            async with connection.transaction():
+                await connection.execute(
+                    "update public.source_documents set visibility = 'FINAL_FINDING' where id = %s",
+                    (source_id,),
+                )
+        with pytest.raises(DatabaseError):
+            async with connection.transaction():
+                await connection.execute(
+                    "update public.evidence_items set review_status = 'REJECTED' where id = %s",
+                    (evidence_id,),
+                )
 
         state = await (
             await connection.execute("select state from public.cases where id = %s", (case_id,))
