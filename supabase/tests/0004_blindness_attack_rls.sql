@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(7);
 
 insert into public.cases (
   id, ntsb_number, title, state, evidence_cutoff
@@ -81,6 +81,22 @@ select extensions.ok(
     '2025-05-01 00:00:00+00', '2025-05-01 00:00:00+00', 'AI_ALLOWED'
   ),
   'metadata eligibility rejects final-report title mismatch'
+);
+select extensions.ok(
+  has_function_privilege(
+    'casezero_blind',
+    'public.lock_investigation(uuid,jsonb,jsonb,jsonb,text)',
+    'EXECUTE'
+  ),
+  'blind role can invoke the atomic lock function'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'casezero_eval',
+    'public.lock_investigation(uuid,jsonb,jsonb,jsonb,text)',
+    'EXECUTE'
+  ),
+  'evaluation role cannot invoke the lock function'
 );
 
 select * from extensions.finish();
