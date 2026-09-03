@@ -27,7 +27,7 @@ CUTOFF = datetime(2025, 5, 1, tzinfo=UTC)
             CUTOFF,
             Visibility.INVESTIGATION_EVIDENCE,
         ),
-        ("WITNESS_STATEMENT", "Witness statement", None, Visibility.INVESTIGATION_EVIDENCE),
+        ("WITNESS_STATEMENT", "Witness statement", None, Visibility.OFFICIAL_ANALYSIS),
         (None, "Unclassified attachment", None, Visibility.OFFICIAL_ANALYSIS),
     ],
 )

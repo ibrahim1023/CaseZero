@@ -18,7 +18,7 @@ def classify_visibility(
         return Visibility.FINAL_FINDING
     if _OFFICIAL_PATTERN.search(searchable):
         return Visibility.OFFICIAL_ANALYSIS
-    if published_at is not None and published_at > cutoff:
+    if published_at is None or published_at > cutoff:
         return Visibility.OFFICIAL_ANALYSIS
     if not document_type:
         return Visibility.OFFICIAL_ANALYSIS
