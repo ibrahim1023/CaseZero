@@ -30,6 +30,20 @@ class HostedState:
     audit_table: bool
     lock_rls: bool
     audit_rls: bool
+    reference_case_state: str
+    reference_cutoff_matches: bool
+    reference_locked: bool
+
+
+def processor_policy_exposes_final(
+    policy_qualifier: str, eligibility_definition: str
+) -> bool:
+    policy = policy_qualifier.casefold()
+    helper = eligibility_definition.casefold()
+    return "is_blind_metadata_eligible" not in policy or not all(
+        value in helper
+        for value in ("investigation_evidence", "ai_allowed", "final_report")
+    )
 
 
 def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
@@ -59,4 +73,10 @@ def evaluate_hosted_state(state: HostedState) -> tuple[str, ...]:
         errors.append("investigation_locks is missing forced RLS")
     if not state.audit_table or not state.audit_rls:
         errors.append("access_audit_events is missing forced RLS")
+    if state.reference_case_state != "BLIND":
+        errors.append("reference case state must remain BLIND")
+    if not state.reference_cutoff_matches:
+        errors.append("reference case cutoff does not match its manifest")
+    if state.reference_locked:
+        errors.append("reference case must remain unlocked")
     return tuple(errors)

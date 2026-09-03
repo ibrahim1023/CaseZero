@@ -1,7 +1,13 @@
 import asyncio
+from pathlib import Path
 
-from casezero_api.hosted_verify import HostedState, evaluate_hosted_state
+from casezero_api.hosted_verify import (
+    HostedState,
+    evaluate_hosted_state,
+    processor_policy_exposes_final,
+)
 from casezero_api.settings import HostedSettings
+from casezero_ntsb.curation import load_curated_manifest
 from psycopg import AsyncConnection
 
 
@@ -50,7 +56,21 @@ async def inspect() -> HostedState:
                 """
             )
         ).fetchone()
-        processor_visible_final = policy is None or "INVESTIGATION_EVIDENCE" not in str(policy[0])
+        eligibility = await (
+            await connection.execute(
+                """
+                select pg_get_functiondef(
+                  to_regprocedure(
+                    'public.is_blind_metadata_eligible(text,text,text,timestamptz,timestamptz,text)'
+                  )
+                )
+                """
+            )
+        ).fetchone()
+        processor_visible_final = processor_policy_exposes_final(
+            str(policy[0]) if policy else "",
+            str(eligibility[0]) if eligibility and eligibility[0] else "",
+        )
         public_role_grants = int(
             (
                 await (
@@ -76,6 +96,25 @@ async def inspect() -> HostedState:
             ).fetchone()
             is not None
         )
+        manifest = load_curated_manifest(
+            Path(__file__).parents[1]
+            / "fixtures"
+            / "real-cases"
+            / "cen22fa375"
+            / "manifest.json"
+        )
+        reference = await (
+            await connection.execute(
+                """
+                select state, evidence_cutoff,
+                       exists(
+                         select 1 from public.investigation_locks
+                         where case_id = cases.id
+                       )
+                from public.cases where ntsb_number = 'CEN22FA375'
+                """
+            )
+        ).fetchone()
         return HostedState(
             environment=str(environment[0]) if environment else "",
             tables=tables,
@@ -88,6 +127,11 @@ async def inspect() -> HostedState:
             audit_table="access_audit_events" in tables,
             lock_rls="investigation_locks" in rls_tables,
             audit_rls="access_audit_events" in rls_tables,
+            reference_case_state=str(reference[0]) if reference else "",
+            reference_cutoff_matches=(
+                reference is not None and reference[1] == manifest.blind_cutoff
+            ),
+            reference_locked=bool(reference[2]) if reference else True,
         )
 
 
@@ -102,6 +146,7 @@ def main() -> None:
     print("PASS expected schema and RLS")
     print("PASS private source and derived buckets")
     print("PASS processor final-finding boundary")
+    print("PASS reference case cutoff and unlocked state")
 
 
 if __name__ == "__main__":

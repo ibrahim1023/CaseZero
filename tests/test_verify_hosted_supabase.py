@@ -1,4 +1,8 @@
-from casezero_api.hosted_verify import HostedState, evaluate_hosted_state
+from casezero_api.hosted_verify import (
+    HostedState,
+    evaluate_hosted_state,
+    processor_policy_exposes_final,
+)
 
 EXPECTED_TABLES = {
     "cases",
@@ -29,9 +33,20 @@ def state(**changes) -> HostedState:
         "audit_table": True,
         "lock_rls": True,
         "audit_rls": True,
+        "reference_case_state": "BLIND",
+        "reference_cutoff_matches": True,
+        "reference_locked": False,
     }
     values.update(changes)
     return HostedState(**values)
+
+
+def test_processor_policy_verifier_follows_eligibility_helper() -> None:
+    policy = "is_blind_metadata_eligible(source.title, source.visibility)"
+    helper = "INVESTIGATION_EVIDENCE AI_ALLOWED FINAL_REPORT"
+    assert processor_policy_exposes_final(policy, helper) is False
+    assert processor_policy_exposes_final(policy, "AI_ALLOWED") is True
+    assert processor_policy_exposes_final("visibility only", helper) is True
 
 
 def test_development_private_hosted_state_passes() -> None:
@@ -61,6 +76,19 @@ def test_public_or_missing_bucket_fails() -> None:
     errors = evaluate_hosted_state(state(buckets={"casezero-sources": True}))
     assert any("private" in error for error in errors)
     assert any("casezero-derived" in error for error in errors)
+
+
+def test_reference_case_must_remain_blind_cutoff_bound_and_unlocked() -> None:
+    errors = evaluate_hosted_state(
+        state(
+            reference_case_state="LOCKED",
+            reference_cutoff_matches=False,
+            reference_locked=True,
+        )
+    )
+    assert any("reference case state" in error for error in errors)
+    assert any("reference case cutoff" in error for error in errors)
+    assert any("reference case must remain unlocked" in error for error in errors)
 
 
 def test_public_role_grants_fail_closed() -> None:

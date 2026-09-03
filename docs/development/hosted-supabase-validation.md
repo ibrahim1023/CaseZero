@@ -28,7 +28,12 @@ semantic-unit completion checkpoints so valid zero-observation results are
 idempotent without fabricating evidence. Migration 0008 applies the same
 explicit completion contract to candidate batches, keyed by their exact
 evidence sets, including valid zero-candidate outputs. Migration 0009 separates
-visibility-blocked audit records from rights-based skips.
+visibility-blocked audit records from rights-based skips. Phase 2 migrations
+0010–0015 add the stored cutoff, forced-RLS lock/audit schema, guarded blind
+transition, hardened role policies, database-computed lock hashes, post-lock
+immutability triggers, and role-bound append-only audit function. Each migration
+was dry-run before deployment; no reset, truncate, drop-table, or data deletion
+was applied.
 
 Applied migrations:
 
@@ -42,6 +47,12 @@ Applied migrations:
 0007_semantic_unit_completions.sql
 0008_candidate_batch_completions.sql
 0009_processing_skip_statuses.sql
+0010_phase2_boundary_schema.sql
+0011_enter_blind.sql
+0012_blindness_rls.sql
+0013_investigation_lock.sql
+0014_post_lock_immutability.sql
+0015_access_audit.sql
 ```
 
 ## Hosted verification
@@ -51,15 +62,24 @@ PASS hosted environment marker
 PASS expected schema and RLS
 PASS private source and derived buckets
 PASS processor final-finding boundary
+PASS reference case cutoff and unlocked state
 ```
 
 Both `casezero-sources` and `casezero-derived` exist as private buckets. No
 `anon` or `authenticated` public-schema table grants remain. Live requests with
-the publishable key returned no REST rows or Storage listings, and known private
-object reads were denied. The database environment marker is `development`.
+the publishable key returned no REST rows or Storage listings; Phase 2 RPC calls
+were also denied. Six rollback-isolated hosted repository tests passed, and all
+five pgTAP files reported only `ok` assertions after fixture queries were scoped
+to their temporary cases.
+
+CEN22FA375 received its cutoff only from the committed curated manifest. It
+remains `BLIND`, has no investigation lock, and completed a role-scoped no-change
+processing run with 3 structural, 180 semantic, and 11 candidate checkpoints
+reused and no model usage. The database environment marker is `development`.
 This project is not approved for production traffic.
 
 ## Remaining gate
 
-Phase 1 still requires fresh hosted ingestion, Hyperfusion-only processing,
-and a no-change idempotency rerun. Temporary local database rows are not copied.
+Phase 2 still requires the final offline/hosted verification record and mandatory
+phase explanation. Temporary lock fixtures were rolled back; no official result
+was revealed.

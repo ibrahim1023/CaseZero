@@ -21,6 +21,19 @@ class AcquisitionRepository:
     def __init__(self, connection: AsyncConnection[tuple[object, ...]]) -> None:
         self._connection = connection
 
+    async def get_case_id(self, ntsb_number: str) -> UUID | None:
+        cursor = await self._connection.execute(
+            "select id from public.cases where ntsb_number = %s", (ntsb_number,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row is not None and isinstance(row[0], UUID) else None
+
+    async def has_lock(self, case_id: UUID) -> bool:
+        cursor = await self._connection.execute(
+            "select 1 from public.investigation_locks where case_id = %s", (case_id,)
+        )
+        return await cursor.fetchone() is not None
+
     async def upsert_case(self, metadata: CaseMetadata) -> UUID:
         cursor = await self._connection.execute(
             """

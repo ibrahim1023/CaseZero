@@ -56,9 +56,13 @@ insert into public.processing_runs (
 );
 insert into processor_observation
 select
-  (select count(*)::integer from public.source_documents),
-  (select count(*)::integer from public.docket_items),
-  (select count(*)::integer from public.processing_runs);
+  (select count(*)::integer from public.source_documents
+   where case_id = '10000000-0000-0000-0000-000000000001'),
+  (select count(*)::integer from public.docket_items
+   where case_id = '10000000-0000-0000-0000-000000000001'),
+  (select count(*)::integer from public.processing_runs run
+   join public.source_documents source on source.id = run.source_document_id
+   where source.case_id = '10000000-0000-0000-0000-000000000001');
 reset role;
 
 select extensions.is(

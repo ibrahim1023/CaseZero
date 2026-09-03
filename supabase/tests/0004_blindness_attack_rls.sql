@@ -39,17 +39,20 @@ grant insert on role_observation to casezero_blind, casezero_processor, casezero
 
 set local role casezero_blind;
 insert into role_observation
-values ('blind', (select count(*)::integer from public.source_documents));
+values ('blind', (select count(*)::integer from public.source_documents
+ where case_id = '20000000-0000-0000-0000-000000000001'));
 reset role;
 
 set local role casezero_processor;
 insert into role_observation
-values ('processor', (select count(*)::integer from public.source_documents));
+values ('processor', (select count(*)::integer from public.source_documents
+ where case_id = '20000000-0000-0000-0000-000000000001'));
 reset role;
 
 set local role casezero_eval;
 insert into role_observation
-values ('evaluation', (select count(*)::integer from public.source_documents));
+values ('evaluation', (select count(*)::integer from public.source_documents
+ where case_id = '20000000-0000-0000-0000-000000000001'));
 reset role;
 
 select extensions.is(
