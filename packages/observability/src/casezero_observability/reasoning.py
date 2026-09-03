@@ -1,11 +1,21 @@
 import hashlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from casezero_evidence import ProcessingDisposition
+from casezero_evidence import (
+    AccessAuditEvent,
+    AccessCapability,
+    AccessOperation,
+    AuditReasonCode,
+    ProcessingDisposition,
+    RuntimeActor,
+    WorkflowStage,
+)
+from casezero_evidence.access import AccessAuditRecorder
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelAPIError, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -81,15 +91,26 @@ class ModelRunRecorder(Protocol):
     ) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class ModelAuditContext:
+    recorder: AccessAuditRecorder
+    stage: WorkflowStage
+    actor_role: RuntimeActor
+    network_host: str
+    now: Callable[[], datetime]
+
+
 class ModelRouter:
     def __init__(
         self,
         primary: StructuredModel,
         *,
         recorder: ModelRunRecorder | None = None,
+        audit: ModelAuditContext | None = None,
     ) -> None:
         self._primary = primary
         self._recorder = recorder
+        self._audit = audit
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT], disposition: ProcessingDisposition
@@ -109,6 +130,22 @@ class ModelRouter:
     ) -> OutputT:
         started_at = datetime.now(UTC)
         started = time.monotonic()
+        if self._audit is not None:
+            if request.case_id is None:
+                raise ValueError("audited model requests require case_id")
+            await self._audit.recorder.record(
+                AccessAuditEvent(
+                    case_id=request.case_id,
+                    stage=self._audit.stage,
+                    actor_role=self._audit.actor_role,
+                    capability=AccessCapability.MODEL_INFERENCE,
+                    operation=AccessOperation.NETWORK,
+                    network_host=self._audit.network_host,
+                    allowed=True,
+                    reason_code=AuditReasonCode.ALLOWED_MODEL_HOST,
+                    occurred_at=self._audit.now(),
+                )
+            )
         try:
             generation = await model.generate(request)
         except ModelFailure:

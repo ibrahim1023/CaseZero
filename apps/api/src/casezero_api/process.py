@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
@@ -15,13 +16,16 @@ from casezero_evidence import (
     DocumentType,
     EntityCandidate,
     EvidenceItem,
+    PostgresAccessAuditRecorder,
     ProcessingDisposition,
     ProcessingSource,
     ReviewStatus,
+    RuntimeActor,
     SourceDocument,
     StructuralUnit,
     TimelineCandidate,
     Visibility,
+    WorkflowStage,
 )
 from casezero_evidence.repository import EvidenceRepository, StoredSourceRecord
 from casezero_evidence.source_store import SourceStore, StoreIntegrityError
@@ -46,6 +50,7 @@ from casezero_ntsb.curation import (
 )
 from casezero_ntsb.visibility import classify_visibility
 from casezero_observability import (
+    ModelAuditContext,
     ModelFailure,
     ModelRouter,
     ModelRoutingDenied,
@@ -616,7 +621,11 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
                 client=storage_client,
             )
             repository = EvidenceRepository(connection)
-            router = _model_router(repository, settings)
+            router = _model_router(
+                repository,
+                PostgresAccessAuditRecorder(connection),
+                settings,
+            )
             orchestrator = ProcessingOrchestrator(
                 ProcessorRegistry(
                     (
@@ -645,14 +654,31 @@ async def process_from_environment(ntsb_number: str) -> ProcessingReport:
             ).process_case(ntsb_number, manifest, None)
 
 
-def _model_router(repository: EvidenceRepository, settings: HostedSettings) -> ModelRouter:
+def _model_router(
+    repository: EvidenceRepository,
+    access_recorder: PostgresAccessAuditRecorder,
+    settings: HostedSettings,
+) -> ModelRouter:
     primary = PydanticReasoningModel.openai_compatible(
         settings.text_model,
         settings.hyperfusion_base_url,
         settings.hyperfusion_api_key.get_secret_value(),
         provider="hyperfusion",
     )
-    return ModelRouter(primary, recorder=repository)
+    network_host = urlparse(settings.hyperfusion_base_url).hostname
+    if network_host is None:
+        raise ValueError("Hyperfusion base URL must include a hostname")
+    return ModelRouter(
+        primary,
+        recorder=repository,
+        audit=ModelAuditContext(
+            recorder=access_recorder,
+            stage=WorkflowStage.PROCESSING,
+            actor_role=RuntimeActor.PROCESSOR,
+            network_host=network_host,
+            now=lambda: datetime.now(UTC),
+        ),
+    )
 
 
 def _docket_item(case_id: UUID, item: CuratedDocketItem) -> DocketItem:

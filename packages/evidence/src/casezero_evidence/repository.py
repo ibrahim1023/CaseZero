@@ -34,6 +34,24 @@ class StoredSourceRecord:
     storage_path: str
 
 
+def _source_document_from_row(row: tuple[object, ...]) -> SourceDocument:
+    return SourceDocument.model_validate(
+        {
+            "id": row[0],
+            "case_id": row[1],
+            "title": row[2],
+            "source_url": row[3],
+            "published_at": row[4],
+            "evidence_date": row[5],
+            "retrieved_at": row[6],
+            "document_type": row[7],
+            "visibility": row[8],
+            "checksum": row[9],
+        },
+        strict=False,
+    )
+
+
 class EvidenceRepository:
     def __init__(self, connection: AsyncConnection[tuple[object, ...]]) -> None:
         self._connection = connection
@@ -74,22 +92,24 @@ class EvidenceRepository:
         row = await cursor.fetchone()
         if row is None:
             return None
-        document = SourceDocument.model_validate(
-            {
-                "id": row[0],
-                "case_id": row[1],
-                "title": row[2],
-                "source_url": row[3],
-                "published_at": row[4],
-                "evidence_date": row[5],
-                "retrieved_at": row[6],
-                "document_type": row[7],
-                "visibility": row[8],
-                "checksum": row[9],
-            },
-            strict=False,
+        return StoredSourceRecord(
+            document=_source_document_from_row(row), storage_path=str(row[10])
         )
-        return StoredSourceRecord(document=document, storage_path=str(row[10]))
+
+    async def get_source_document_by_id(
+        self, case_id: UUID, document_id: UUID
+    ) -> SourceDocument | None:
+        cursor = await self._connection.execute(
+            """
+            select id, case_id, title, source_url, published_at, evidence_date,
+                   retrieved_at, document_type, visibility, checksum
+            from public.source_documents
+            where case_id = %s and id = %s
+            """,
+            (case_id, document_id),
+        )
+        row = await cursor.fetchone()
+        return _source_document_from_row(row) if row is not None else None
 
     async def upsert_docket_item(self, item: DocketItem) -> UUID:
         if item.processing_disposition is None:

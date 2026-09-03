@@ -1,4 +1,5 @@
 from casezero_observability.reasoning import (
+    ModelAuditContext,
     ModelFailure,
     ModelRouter,
     ModelRoutingDenied,
@@ -10,6 +11,7 @@ from casezero_observability.reasoning import (
 )
 
 __all__ = [
+    "ModelAuditContext",
     "ModelFailure",
     "ModelRouter",
     "ModelRoutingDenied",

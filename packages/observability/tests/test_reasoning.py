@@ -1,10 +1,18 @@
 import hashlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from casezero_evidence import ProcessingDisposition
+from casezero_evidence import (
+    AccessCapability,
+    AccessOperation,
+    ProcessingDisposition,
+    RuntimeActor,
+    WorkflowStage,
+)
 from casezero_observability.reasoning import (
+    ModelAuditContext,
     ModelFailure,
     ModelRouter,
     ModelRoutingDenied,
@@ -45,6 +53,14 @@ class Recorder:
         self.runs.append(values)
 
 
+class AccessRecorder:
+    def __init__(self) -> None:
+        self.events = []
+
+    async def record(self, event) -> None:
+        self.events.append(event)
+
+
 def test_prompt_hash_uses_versioned_template_not_source_payload() -> None:
     request = ReasoningRequest(
         stage="evidence",
@@ -80,6 +96,37 @@ async def test_non_ai_allowed_never_calls_model(disposition: ProcessingDispositi
             ReasoningRequest(stage="evidence", prompt="bounded", prompt_template="test.v1", output_type=Output), disposition
         )
     assert model.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_model_call_records_hostname_only_access_event() -> None:
+    case_id = UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
+    access = AccessRecorder()
+    audit = ModelAuditContext(
+        recorder=access,
+        stage=WorkflowStage.PROCESSING,
+        actor_role=RuntimeActor.PROCESSOR,
+        network_host="api.hyperfusion.io",
+        now=lambda: datetime(2026, 9, 1, tzinfo=UTC),
+    )
+    router = ModelRouter(FakeModel("hyperfusion"), audit=audit)
+
+    await router.generate(
+        ReasoningRequest(
+            stage="evidence",
+            prompt="private source payload",
+            prompt_template="test.v1",
+            output_type=Output,
+            case_id=case_id,
+        ),
+        ProcessingDisposition.AI_ALLOWED,
+    )
+
+    event = access.events[0]
+    assert event.capability is AccessCapability.MODEL_INFERENCE
+    assert event.operation is AccessOperation.NETWORK
+    assert event.network_host == "api.hyperfusion.io"
+    assert "private source payload" not in event.model_dump_json()
 
 
 @pytest.mark.asyncio

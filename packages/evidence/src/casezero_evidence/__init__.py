@@ -1,3 +1,10 @@
+from casezero_evidence.access import (
+    AccessAuditRecorder,
+    BlindAccessDenied,
+    BlindAccessService,
+    BlindSourceReader,
+    PostgresAccessAuditRecorder,
+)
 from casezero_evidence.blindness import (
     AccessAuditEvent,
     AccessCapability,
@@ -48,11 +55,15 @@ from casezero_evidence.supabase_store import SupabaseArtifactStore, SupabaseSour
 
 __all__ = [
     "AccessAuditEvent",
+    "AccessAuditRecorder",
     "AccessCapability",
     "AccessOperation",
     "AssessmentSnapshot",
     "AudioLocator",
     "AuditReasonCode",
+    "BlindAccessDenied",
+    "BlindAccessService",
+    "BlindSourceReader",
     "BoundingBox",
     "ClaimCandidate",
     "ClaimStatus",
@@ -68,6 +79,7 @@ __all__ = [
     "ImageLocator",
     "InvestigationLock",
     "PdfLocator",
+    "PostgresAccessAuditRecorder",
     "ProcessingDisposition",
     "ProcessingRun",
     "ProcessingSource",
