@@ -29,11 +29,11 @@ idempotent without fabricating evidence. Migration 0008 applies the same
 explicit completion contract to candidate batches, keyed by their exact
 evidence sets, including valid zero-candidate outputs. Migration 0009 separates
 visibility-blocked audit records from rights-based skips. Phase 2 migrations
-0010–0015 add the stored cutoff, forced-RLS lock/audit schema, guarded blind
-transition, hardened role policies, database-computed lock hashes, post-lock
-immutability triggers, and role-bound append-only audit function. Each migration
-was dry-run before deployment; no reset, truncate, drop-table, or data deletion
-was applied.
+0010–0017 add the stored cutoff, forced-RLS lock/audit schema, guarded blind
+transition, hardened role policies, database-computed eligible-evidence lock
+hashes, post-lock immutability triggers, role-bound append-only audit, and a
+checksum/eligibility-guarded source-link function. Each migration was dry-run
+before deployment; no reset, truncate, drop-table, or data deletion was applied.
 
 Applied migrations:
 
@@ -53,6 +53,8 @@ Applied migrations:
 0013_investigation_lock.sql
 0014_post_lock_immutability.sql
 0015_access_audit.sql
+0016_lock_eligible_evidence_only.sql
+0017_link_processable_source.sql
 ```
 
 ## Hosted verification
@@ -68,7 +70,7 @@ PASS reference case cutoff and unlocked state
 Both `casezero-sources` and `casezero-derived` exist as private buckets. No
 `anon` or `authenticated` public-schema table grants remain. Live requests with
 the publishable key returned no REST rows or Storage listings; Phase 2 RPC calls
-were also denied. Six rollback-isolated hosted repository tests passed, and all
+were also denied. Seven rollback-isolated hosted repository tests passed, and all
 five pgTAP files reported only `ok` assertions after fixture queries were scoped
 to their temporary cases.
 
