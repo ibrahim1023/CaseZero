@@ -30,6 +30,7 @@ async def test_runtime_roles_enforce_visibility_cutoff_and_disposition() -> None
             """,
             (case_id, f"TEST-{case_id.hex[:12]}", CUTOFF),
         )
+        source_ids = []
         rows = (
             ("Eligible factual", "FACTUAL_REPORT", "AI_ALLOWED", CUTOFF, "INVESTIGATION_EVIDENCE", "a"),
             ("Official final", "FINAL_REPORT", "AI_ALLOWED", CUTOFF, "FINAL_FINDING", "b"),
@@ -41,6 +42,7 @@ async def test_runtime_roles_enforce_visibility_cutoff_and_disposition() -> None
         for index, (title, document_type, disposition, published_at, visibility, checksum) in enumerate(rows):
             docket_id = uuid4()
             source_id = uuid4()
+            source_ids.append(source_id)
             source_url = f"https://data.ntsb.gov/phase2-{case_id}-{index}.pdf"
             await connection.execute(
                 """
@@ -91,6 +93,17 @@ async def test_runtime_roles_enforce_visibility_cutoff_and_disposition() -> None
                 (case_id,),
             )
         ).fetchone()
+        with pytest.raises(DatabaseError):
+            async with connection.transaction():
+                await connection.execute(
+                    """
+                    insert into public.processing_runs (
+                      id, source_document_id, source_checksum, processor_name,
+                      processor_version, configuration_hash, status, started_at
+                    ) values (%s, %s, %s, 'attack', '1.0.0', %s, 'RUNNING', %s)
+                    """,
+                    (uuid4(), source_ids[2], "c" * 64, "5" * 64, CUTOFF),
+                )
         await connection.execute("reset role")
 
         await connection.execute("set local role casezero_eval")
