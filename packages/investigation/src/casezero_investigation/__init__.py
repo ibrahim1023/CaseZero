@@ -10,6 +10,18 @@ from casezero_investigation.hypotheses import (
     TestStrength,
     TestType,
 )
+from casezero_investigation.jobs import (
+    AttemptOutcome,
+    FailureCode,
+    InvestigationConfig,
+    InvestigationJob,
+    InvestigationJobAttempt,
+    JobStatus,
+    ModelRequestAttempt,
+    ModelRequestStatus,
+    ValidationIssue,
+    job_input_payload,
+)
 from casezero_investigation.models import (
     Claim,
     ClaimStatus,
@@ -26,10 +38,12 @@ from casezero_investigation.models import (
 )
 
 __all__ = [
+    "AttemptOutcome",
     "Claim",
     "ClaimStatus",
     "ConfidenceRevision",
     "ExecutionKind",
+    "FailureCode",
     "Hypothesis",
     "HypothesisCritique",
     "HypothesisStatus",
@@ -37,10 +51,16 @@ __all__ = [
     "HypothesisTestDraft",
     "HypothesisTestStatus",
     "Investigation",
+    "InvestigationConfig",
     "InvestigationEntity",
+    "InvestigationJob",
+    "InvestigationJobAttempt",
     "InvestigationStage",
     "InvestigationStatus",
+    "JobStatus",
     "LinkPolarity",
+    "ModelRequestAttempt",
+    "ModelRequestStatus",
     "TestDelta",
     "TestOutcome",
     "TestStrength",
@@ -48,4 +68,6 @@ __all__ = [
     "TimePrecision",
     "TimelineEvent",
     "UnresolvedQuestion",
+    "ValidationIssue",
+    "job_input_payload",
 ]
