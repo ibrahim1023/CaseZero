@@ -23,6 +23,7 @@ members = [
     "casezero-evaluation",
     "casezero-evidence",
     "casezero-ingestion",
+    "casezero-investigation",
     "casezero-ntsb",
     "casezero-observability",
 ]
@@ -177,6 +178,7 @@ dependencies = [
     { name = "casezero-evaluation" },
     { name = "casezero-evidence" },
     { name = "casezero-ingestion" },
+    { name = "casezero-investigation" },
     { name = "casezero-ntsb" },
     { name = "casezero-observability" },
 ]
@@ -199,6 +201,7 @@ requires-dist = [
     { name = "casezero-evaluation", editable = "packages/evaluation" },
     { name = "casezero-evidence", editable = "packages/evidence" },
     { name = "casezero-ingestion", editable = "packages/ingestion" },
+    { name = "casezero-investigation", editable = "packages/investigation" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
     { name = "casezero-observability", editable = "packages/observability" },
 ]
@@ -293,6 +296,21 @@ requires-dist = [
     { name = "fastexcel", specifier = "==0.20.2" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "polars", specifier = "==1.43.2" },
+]
+
+[[package]]
+name = "casezero-investigation"
+version = "0.1.0"
+source = { editable = "packages/investigation" }
+dependencies = [
+    { name = "casezero-evidence" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "pydantic", specifier = ">=2.11.7" },
 ]
 
 [[package]]

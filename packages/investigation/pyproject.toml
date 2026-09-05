@@ -1,0 +1,15 @@
+[project]
+name = "casezero-investigation"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["casezero-evidence", "pydantic>=2.11.7"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/casezero_investigation"]
+
+[tool.uv.sources]
+casezero-evidence = { workspace = true }
