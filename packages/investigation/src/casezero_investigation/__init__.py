@@ -1,3 +1,10 @@
+from casezero_investigation.events import (
+    ClaimCreatedPayload,
+    HypothesisCreatedPayload,
+    InvestigationEvent,
+    InvestigationStartedPayload,
+    StageTransitionPayload,
+)
 from casezero_investigation.hypotheses import (
     ConfidenceRevision,
     ExecutionKind,
@@ -36,15 +43,22 @@ from casezero_investigation.models import (
     TimePrecision,
     UnresolvedQuestion,
 )
+from casezero_investigation.replay import (
+    InvestigationProjection,
+    ReplayError,
+    replay,
+)
 
 __all__ = [
     "AttemptOutcome",
     "Claim",
+    "ClaimCreatedPayload",
     "ClaimStatus",
     "ConfidenceRevision",
     "ExecutionKind",
     "FailureCode",
     "Hypothesis",
+    "HypothesisCreatedPayload",
     "HypothesisCritique",
     "HypothesisStatus",
     "HypothesisTest",
@@ -53,14 +67,19 @@ __all__ = [
     "Investigation",
     "InvestigationConfig",
     "InvestigationEntity",
+    "InvestigationEvent",
     "InvestigationJob",
     "InvestigationJobAttempt",
+    "InvestigationProjection",
     "InvestigationStage",
+    "InvestigationStartedPayload",
     "InvestigationStatus",
     "JobStatus",
     "LinkPolarity",
     "ModelRequestAttempt",
     "ModelRequestStatus",
+    "ReplayError",
+    "StageTransitionPayload",
     "TestDelta",
     "TestOutcome",
     "TestStrength",
@@ -70,4 +89,5 @@ __all__ = [
     "UnresolvedQuestion",
     "ValidationIssue",
     "job_input_payload",
+    "replay",
 ]
