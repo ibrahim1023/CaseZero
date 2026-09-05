@@ -13,6 +13,23 @@ EXPECTED_TABLES = {
     "candidate_batch_completions",
     "investigation_locks",
     "access_audit_events",
+    "investigations",
+    "claims",
+    "claim_evidence_links",
+    "claim_candidate_links",
+    "investigation_entities",
+    "entity_evidence_links",
+    "entity_candidate_links",
+    "timeline_events",
+    "timeline_evidence_links",
+    "timeline_candidate_links",
+    "hypotheses",
+    "hypothesis_claim_links",
+    "unresolved_questions",
+    "hypothesis_critiques",
+    "hypothesis_tests",
+    "confidence_revisions",
+    "confidence_revision_test_deltas",
 }
 EXPECTED_BUCKETS = {"casezero-sources", "casezero-derived"}
 

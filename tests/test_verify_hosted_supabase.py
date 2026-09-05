@@ -4,7 +4,7 @@ from casezero_api.hosted_verify import (
     processor_policy_exposes_final,
 )
 
-EXPECTED_TABLES = {
+PHASE2_TABLES = {
     "cases",
     "docket_items",
     "source_documents",
@@ -18,6 +18,26 @@ EXPECTED_TABLES = {
     "investigation_locks",
     "access_audit_events",
 }
+PHASE3_TABLES = {
+    "investigations",
+    "claims",
+    "claim_evidence_links",
+    "claim_candidate_links",
+    "investigation_entities",
+    "entity_evidence_links",
+    "entity_candidate_links",
+    "timeline_events",
+    "timeline_evidence_links",
+    "timeline_candidate_links",
+    "hypotheses",
+    "hypothesis_claim_links",
+    "unresolved_questions",
+    "hypothesis_critiques",
+    "hypothesis_tests",
+    "confidence_revisions",
+    "confidence_revision_test_deltas",
+}
+EXPECTED_TABLES = PHASE2_TABLES | PHASE3_TABLES
 
 
 def state(**changes) -> HostedState:
@@ -51,6 +71,15 @@ def test_processor_policy_verifier_follows_eligibility_helper() -> None:
 
 def test_development_private_hosted_state_passes() -> None:
     assert evaluate_hosted_state(state()) == ()
+
+
+def test_phase3_canonical_tables_and_forced_rls_are_required() -> None:
+    errors = evaluate_hosted_state(
+        state(tables=PHASE2_TABLES, rls_tables=PHASE2_TABLES)
+    )
+    assert any("claims" in error for error in errors)
+    assert any("hypotheses" in error for error in errors)
+    assert any("RLS" in error for error in errors)
 
 
 def test_phase2_schema_is_required() -> None:
