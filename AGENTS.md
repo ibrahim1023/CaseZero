@@ -8,6 +8,48 @@ Read `product-spec.md` (local-only input — never stage or commit it) and the
 relevant ADRs in `docs/decision-log/` before changing behavior. The tracked
 foundation design lives in `docs/superpowers/specs/`.
 
+## Current MVP scope and precedence
+
+The current scope supersedes conflicting MVP definitions and sequencing in
+older product/foundation documents and implementation plans. The local-only
+`task.md` tracks this scope; never stage, commit, or push it. The boundaries
+below remain mandatory.
+
+- Prove the investigation process, not answer generation: observed/inferred
+  evidence, competing hypotheses, contradictions, falsification, explainable
+  confidence changes, evidence-backed causal reasoning, and replayable state.
+- First finish the minimum Phase 3 runtime needed for `CEN22FA375`, then inspect
+  that real blind run at the Phase 3.5 kill/continue gate before deeper
+  architecture or Phases 4–6. Reuse the Phase 3 exit run for this inspection;
+  do not make another live call solely for phase bookkeeping.
+- Continue only if the trace demonstrates genuine evidence-driven evolution.
+  Cosmetic hypothesis variants, ignored contradictions, static/arbitrary
+  confidence, unsupported narratives, or mere docket summarization require
+  re-scoping or stopping, even when the final answer matches the NTSB.
+- MVP is three completed, rights-reviewed cases with meaningfully different
+  causal structures, run blind through causal graph, assessment, lock, reveal,
+  measured evaluation, replay, and manual grounding review (Phase 6.5).
+  High answer accuracy is not required; leakage must be zero.
+- UI and five-case validation are post-MVP. A thin UI may begin only after the
+  three-case gate passes and must expose the investigation process. Defer
+  public deployment, portfolio polish, assistant/chat features, and broad SaaS
+  functionality. Do not wait for UI or all benchmark cases to prove one loop.
+- Keep the runtime specific to this investigation: no generalized agent
+  framework, distributed execution, arbitrary agent composition, or speculative
+  workflow infrastructure. Preserve required provenance, blindness, atomic
+  checkpoints, idempotent retry, and crash-resume without generalizing them.
+- Use metadata + FTS first; add pgvector only if the D2 recall probe demonstrates
+  material benefit. Add modalities only when actual case evidence requires them.
+- Implement only evaluation and regression checks that affect the MVP go/no-go
+  decision or protect an actual MVP property. Defer broad judge ensembles,
+  sophisticated calibration, large regression suites, and generalized evaluator
+  infrastructure unless needed to establish credibility.
+- Before adding a task, require a material contribution to the blind experiment;
+  before infrastructure, a need in one of the next three cases; before an
+  evaluator, an effect on the go/no-go decision; before UI, better inspection of
+  the investigation. Otherwise defer it. Audit uncommitted work against these
+  criteria rather than treating an older plan as authorization for more scope.
+
 ## Non-negotiable boundaries
 
 - Only deterministic code may acquire artifacts, hash them, normalize
