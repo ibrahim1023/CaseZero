@@ -13,6 +13,7 @@ from casezero_investigation.jobs import (
     ValidationIssue,
 )
 from casezero_investigation.models import Investigation
+from casezero_investigation.replay import InvestigationProjection
 
 
 def _record[T: BaseModel](model: type[T], value: object) -> T:
@@ -115,6 +116,79 @@ class InvestigationRepository:
             "where investigation_id=%s order by sequence", (investigation_id,),
         )).fetchall()
         return tuple(_record(InvestigationEvent, row[0]) for row in rows)
+
+    async def projection(self, investigation_id: UUID) -> InvestigationProjection:
+        row = await (await self.connection.execute(
+            """
+            select jsonb_build_object(
+                'investigation_id', i.id, 'case_id', i.case_id, 'status', i.status,
+                'current_stage', i.current_stage, 'configuration_hash', i.configuration_hash,
+                'event_head_hash', i.event_head_hash,
+                'entities', coalesce((select jsonb_object_agg(e.id, to_jsonb(e) || jsonb_build_object(
+                    'source_candidate_ids', array(select candidate_id from public.entity_candidate_links
+                        where entity_id=e.id order by candidate_id),
+                    'evidence_ids', array(select evidence_id from public.entity_evidence_links
+                        where entity_id=e.id order by evidence_id)))
+                    from public.investigation_entities e where e.investigation_id=i.id), '{}'),
+                'timeline', coalesce((select jsonb_object_agg(t.id, to_jsonb(t) || jsonb_build_object(
+                    'source_candidate_ids', array(select candidate_id from public.timeline_candidate_links
+                        where timeline_event_id=t.id order by candidate_id),
+                    'evidence_ids', array(select evidence_id from public.timeline_evidence_links
+                        where timeline_event_id=t.id order by evidence_id)))
+                    from public.timeline_events t where t.investigation_id=i.id), '{}'),
+                'claims', coalesce((select jsonb_object_agg(c.id, to_jsonb(c) || jsonb_build_object(
+                    'source_candidate_ids', array(select candidate_id from public.claim_candidate_links
+                        where claim_id=c.id order by candidate_id),
+                    'supporting_evidence_ids', array(select evidence_id from public.claim_evidence_links
+                        where claim_id=c.id and polarity='SUPPORTING' order by evidence_id),
+                    'contradicting_evidence_ids', array(select evidence_id from public.claim_evidence_links
+                        where claim_id=c.id and polarity='CONTRADICTING' order by evidence_id)))
+                    from public.claims c where c.investigation_id=i.id), '{}'),
+                'hypotheses', coalesce((select jsonb_object_agg(h.id,to_jsonb(h))
+                    from public.hypotheses h where h.investigation_id=i.id), '{}'),
+                'hypothesis_claim_links', coalesce((select jsonb_object_agg(h.id,jsonb_build_object(
+                    'supporting', array(select claim_id from public.hypothesis_claim_links
+                        where hypothesis_id=h.id and polarity='SUPPORTING' order by claim_id),
+                    'contradicting', array(select claim_id from public.hypothesis_claim_links
+                        where hypothesis_id=h.id and polarity='CONTRADICTING' order by claim_id)))
+                    from public.hypotheses h where h.investigation_id=i.id), '{}'),
+                'questions', coalesce((select jsonb_object_agg(q.id,to_jsonb(q))
+                    from public.unresolved_questions q where q.investigation_id=i.id), '{}'),
+                'critiques', coalesce((select jsonb_object_agg(c.id,to_jsonb(c) || jsonb_build_object(
+                    'proposed_tests', coalesce((select jsonb_agg(jsonb_build_object(
+                        'type',t.type, 'expected_observation',t.expected_observation,
+                        'strength',t.strength, 'execution_kind',t.execution_kind,
+                        'parameters',t.parameters, 'evidence_ids',t.evidence_ids, 'claim_ids',t.claim_ids
+                    ) order by t.id) from public.hypothesis_tests t where t.critique_id=c.id), '[]')))
+                    from public.hypothesis_critiques c where c.investigation_id=i.id), '{}'),
+                'tests', coalesce((select jsonb_object_agg(t.id,to_jsonb(t))
+                    from public.hypothesis_tests t where t.investigation_id=i.id), '{}'),
+                'revisions', coalesce((select jsonb_object_agg(r.id,to_jsonb(r) || jsonb_build_object(
+                    'test_deltas', coalesce((select jsonb_agg(jsonb_build_object(
+                        'test_id',d.test_id, 'delta',d.delta) order by d.ordinal)
+                        from public.confidence_revision_test_deltas d where d.revision_id=r.id), '[]')))
+                    from public.confidence_revisions r where r.investigation_id=i.id), '{}'),
+                'retrievals', coalesce((select jsonb_object_agg(q.id,jsonb_build_object(
+                    'query_id',q.id, 'hypothesis_id',q.hypothesis_id,
+                    'query',jsonb_build_object(
+                        'investigation_id',q.investigation_id, 'case_id',q.case_id,
+                        'intent',q.intent, 'query_text',q.query_text, 'evidence_types',q.evidence_types,
+                        'document_types',q.document_types, 'entity_ids',q.entity_ids,
+                        'start_at',q.start_at, 'end_at',q.end_at, 'limit',q.result_limit,
+                        'config_version',q.config_version),
+                    'results',coalesce((select jsonb_agg(jsonb_build_object(
+                        'evidence_id',r.evidence_id, 'rank',r.rank, 'total_score',r.total_score::text,
+                        'fts_score',r.fts_score::text, 'entity_score',r.entity_score::text,
+                        'time_score',r.time_score::text, 'type_score',r.type_score::text,
+                        'matched_filters',r.matched_filters) order by r.rank)
+                        from public.retrieval_results r where r.query_id=q.id), '[]')))
+                    from public.retrieval_queries q where q.investigation_id=i.id), '{}')
+            ) from public.investigations i where i.id=%s
+            """, (investigation_id,),
+        )).fetchone()
+        if row is None:
+            raise LookupError("investigation not accessible")
+        return _record(InvestigationProjection, row[0])
 
     async def evidence(self, investigation_id: UUID) -> tuple[EvidenceItem, ...]:
         rows = await (await self.connection.execute(

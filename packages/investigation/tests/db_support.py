@@ -9,6 +9,7 @@ from casezero_evidence import (
     DerivedArtifactKind,
     DocketItem,
     DocumentType,
+    EntityCandidate,
     EvidenceItem,
     EvidenceType,
     ExtractionMethod,
@@ -17,6 +18,8 @@ from casezero_evidence import (
     StructuralUnit,
     StructuralUnitKind,
     TextLocator,
+    TimelineCandidate,
+    TimePrecision,
     Visibility,
 )
 from casezero_evidence.repository import EvidenceRepository
@@ -26,7 +29,9 @@ from pydantic import AnyHttpUrl
 NOW = datetime(2026, 9, 7, tzinfo=UTC)
 
 
-async def seed_case(connection: AsyncConnection) -> tuple[UUID, EvidenceItem, ClaimCandidate]:
+async def seed_case(
+    connection: AsyncConnection, *, complete: bool = False,
+) -> tuple[UUID, EvidenceItem, ClaimCandidate]:
     case_id = uuid4()
     url = AnyHttpUrl(f"https://example.test/{case_id}.txt")
     checksum = hashlib.sha256(case_id.bytes).hexdigest()
@@ -79,7 +84,10 @@ async def seed_case(connection: AsyncConnection) -> tuple[UUID, EvidenceItem, Cl
         model_run_id=run_id, type=EvidenceType.TEXT, observation="Power decreased before landing.",
         source_locator=unit.locator, extraction_method=ExtractionMethod.AI, confidence=0.9,
     )
-    await repository.persist_semantic_result(unit.id, (item,), checksum, NOW)
+    items = (item,)
+    if complete:
+        items += (item.model_copy(update={"id": uuid4(), "observation": "Power recovered."}),)
+    await repository.persist_semantic_result(unit.id, items, checksum, NOW)
     candidate_run = uuid4()
     await repository.record_model_run(
         run_id=candidate_run, case_id=case_id, parent_run_id=None, stage="candidates",
@@ -92,7 +100,21 @@ async def seed_case(connection: AsyncConnection) -> tuple[UUID, EvidenceItem, Cl
         supporting_evidence_ids=(item.id,), confidence=0.9, model_run_id=candidate_run,
         created_at=NOW,
     )
+    candidates: tuple[ClaimCandidate | EntityCandidate | TimelineCandidate, ...] = (candidate,)
+    if complete:
+        candidates += (
+            EntityCandidate(
+                case_id=case_id, type="component", proposed_canonical_name="engine",
+                aliases=("powerplant",), evidence_ids=(item.id,), confidence=0.9,
+                model_run_id=candidate_run, created_at=NOW,
+            ),
+            *(TimelineCandidate(
+                case_id=case_id, occurred_at=NOW, time_precision=TimePrecision.EXACT,
+                description=description, evidence_ids=(item.id,), confidence=0.9,
+                model_run_id=candidate_run, created_at=NOW,
+            ) for description in ("Power decreased.", "Power recovered.")),
+        )
     await repository.persist_candidate_batch(
-        case_id, (unit.id,), checksum, checksum, (candidate,), NOW,
+        case_id, (unit.id,), checksum, checksum, candidates, NOW,
     )
     return case_id, item, candidate
