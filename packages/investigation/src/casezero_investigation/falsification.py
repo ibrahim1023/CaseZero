@@ -61,7 +61,7 @@ def execute_test(
         )
     elif isinstance(parameters, TemporalConsistencyParameters):
         outcome, used_evidence_ids = _temporal_consistency(
-            parameters, events_by_id, set(evidence_by_id)
+            parameters, events_by_id, {item.id for item in selected_evidence}
         )
     elif isinstance(parameters, ClaimContradictionParameters):
         outcome, used_evidence_ids = _claim_contradiction(

@@ -296,6 +296,23 @@ def test_temporal_consistency_compares_exact_timestamps(seconds: int, expected: 
     assert result.result_evidence_ids == (UUID(int=1), UUID(int=2))
 
 
+@pytest.mark.parametrize("seconds", (-1, 1))
+@pytest.mark.parametrize(("before_evidence_id", "used_ids"), ((1, (UUID(int=1),)), (2, ())))
+def test_temporal_consistency_respects_explicit_evidence_scope(
+    seconds: int, before_evidence_id: int, used_ids: tuple[UUID, ...],
+) -> None:
+    selected = evidence_item(1)
+    test = pending_test(FalsificationType.TEMPORAL_CONSISTENCY, evidence_ids=(selected.id,))
+    events = (
+        timeline_event(10, NOW, evidence_id=before_evidence_id),
+        timeline_event(11, NOW + timedelta(seconds=seconds), evidence_id=2),
+    )
+    result = execute_test(test, (selected, evidence_item(2)), (), events, NOW)
+    assert result.outcome is Outcome.INCONCLUSIVE
+    assert result.evidence_ids == (selected.id,)
+    assert result.result_evidence_ids == used_ids
+
+
 @pytest.mark.parametrize("position", [0, 1])
 @pytest.mark.parametrize("precision", list(TimePrecision))
 def test_temporal_consistency_with_missing_timestamps_is_inconclusive(
