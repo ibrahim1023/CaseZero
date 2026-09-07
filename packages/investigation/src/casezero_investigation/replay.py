@@ -39,6 +39,8 @@ def replay(events: tuple[InvestigationEvent, ...]) -> InvestigationProjection:
     first = events[0]
     if first.sequence != 1 or not isinstance(first.payload, InvestigationStartedPayload):
         raise ReplayError("event sequence must start with investigation")
+    if first.computed_hash() != first.event_hash:
+        raise ReplayError("event digest does not match payload")
     projection = InvestigationProjection(
         investigation_id=first.investigation_id,
         case_id=first.case_id,
@@ -53,6 +55,8 @@ def replay(events: tuple[InvestigationEvent, ...]) -> InvestigationProjection:
             raise ReplayError("event sequence is not contiguous")
         if event.previous_event_hash != previous.event_hash:
             raise ReplayError("event previous hash does not match")
+        if event.computed_hash() != event.event_hash:
+            raise ReplayError("event digest does not match payload")
         if (
             event.investigation_id != projection.investigation_id
             or event.case_id != projection.case_id

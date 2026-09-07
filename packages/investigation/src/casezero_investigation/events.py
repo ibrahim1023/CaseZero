@@ -3,8 +3,9 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from casezero_evidence.models import StrictModel
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, JsonValue, field_validator, model_validator
 
+from casezero_investigation.canonical import canonical_digest
 from casezero_investigation.models import (
     Claim,
     Hypothesis,
@@ -84,3 +85,19 @@ class InvestigationEvent(StrictModel):
         if self.payload.kind == "INVESTIGATION_STARTED" and self.target_id != self.investigation_id:
             raise ValueError("investigation start target must match investigation id")
         return self
+
+    def hash_envelope(self) -> dict[str, JsonValue]:
+        return {
+            "previous_hash": self.previous_event_hash,
+            "investigation_id": str(self.investigation_id),
+            "case_id": str(self.case_id),
+            "sequence": self.sequence,
+            "event_type": self.event_type,
+            "target_type": self.target_type,
+            "target_id": str(self.target_id),
+            "payload": self.payload.model_dump(mode="json"),
+            "model_run_id": str(self.model_run_id) if self.model_run_id else None,
+        }
+
+    def computed_hash(self) -> str:
+        return canonical_digest(self.hash_envelope())
