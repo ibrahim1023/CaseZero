@@ -249,6 +249,10 @@ async def test_cancelled_request_reclaims_without_resetting_budget():
         assert [r.request_ordinal for r in receipts] == [1, 2, 3]
         assert [r.status.value for r in receipts] == ["LEASE_EXPIRED", "PROVIDER_FAILED", "SCHEMA_FAILED"]
         assert receipts[-1].job_attempt_number == 2
+        assert await (await connection.execute(
+            "select count(*) from investigation_spans where investigation_id=%s and status='RUNNING'",
+            (investigation.id,),
+        )).fetchone() == (0,)
 
 
 async def test_tools_are_bound_to_active_pinned_case_and_require_blind_role():
