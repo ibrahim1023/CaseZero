@@ -11,7 +11,8 @@ from casezero_investigation import (
     ReplayError,
     replay,
 )
-from test_events import CASE_ID, INVESTIGATION_ID, claim, hypothesis
+
+from .test_events import CASE_ID, INVESTIGATION_ID, claim, hypothesis
 
 NOW = datetime(2026, 9, 5, tzinfo=UTC)
 
