@@ -154,6 +154,15 @@ Stop background commands, watchers, browser previews, and database sessions as
 soon as they are no longer in use. After interruption or failure, verify that
 no stale process or open transaction remains before retrying.
 
+Do not leave the user without an update during long-running work. Before a
+command, live call, database operation, or subagent likely to take more than a
+couple of minutes, state what is running and what result is expected. While it
+remains active, provide a concise progress update at least every five minutes
+or whenever a meaningful checkpoint, failure, or blocker occurs. If a command
+is silent or takes disproportionately long, inspect its process/database state,
+report what it is doing, and stop or narrow it rather than repeatedly waiting
+without communication.
+
 ## Key docs
 
 - Architecture: `docs/architecture.md` · Decisions: `docs/decision-log/`
