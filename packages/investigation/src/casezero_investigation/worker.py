@@ -106,6 +106,31 @@ PROMPTS = {
 MAX_INPUT_BYTES = 180_000
 
 
+def _prompt_state(state: InvestigationProjection) -> dict[str, object]:
+    return {
+        "claims": {
+            str(identifier): claim.model_dump(mode="json", include={
+                "text", "status", "confidence", "supporting_evidence_ids",
+                "contradicting_evidence_ids",
+            }) for identifier, claim in state.claims.items()
+        },
+        "timeline": {
+            str(identifier): event.model_dump(mode="json", include={
+                "occurred_at", "time_precision", "description", "confidence", "evidence_ids",
+            }) for identifier, event in state.timeline.items()
+        },
+        "entities": {
+            str(identifier): entity.model_dump(mode="json", include={
+                "type", "canonical_name", "aliases", "evidence_ids",
+            }) for identifier, entity in state.entities.items()
+        },
+        "questions": {
+            str(identifier): question.model_dump(mode="json", include={"hypothesis_id", "text"})
+            for identifier, question in state.questions.items()
+        },
+    }
+
+
 class SemanticResult(StrictModel):
     classification: Literal["INFERRED"]
     outcome: TestOutcome
@@ -216,15 +241,38 @@ class Worker:
         elif job.stage is Stage.GENERATE_HYPOTHESES:
             if not claims:
                 raise StageExhausted(FailureCode.REFERENCE_INVALID)
-            data = {"state": state.model_dump(mode="json", include={"claims", "timeline", "entities"})}
+            data = {"state": _prompt_state(state)}
         elif job.stage in {Stage.SEARCH_SUPPORT, Stage.SEARCH_CONTRADICTIONS, Stage.DESIGN_FALSIFICATION_TESTS}:
             hypothesis = state.hypotheses[UUID(job.work_key)]
-            data = {"hypothesis": hypothesis.model_dump(mode="json"), "state": state.model_dump(mode="json", include={"claims", "timeline", "entities", "questions"})}
+            data = {"hypothesis": hypothesis.model_dump(mode="json"), "state": _prompt_state(state)}
             if job.stage is Stage.DESIGN_FALSIFICATION_TESTS:
-                data["contradiction_retrievals"] = [r.model_dump(mode="json") for r in state.retrievals.values() if r.hypothesis_id == hypothesis.id and r.query.intent.value == "CONTRADICT"]
-                if not data["contradiction_retrievals"]:
+                contradictions = tuple(
+                    retrieval for retrieval in state.retrievals.values()
+                    if retrieval.hypothesis_id == hypothesis.id
+                    and retrieval.query.intent.value == "CONTRADICT"
+                )
+                if not contradictions:
                     raise StageExhausted(FailureCode.REFERENCE_INVALID)
-                data["evidence"] = [e.model_dump(mode="json") for e in evidence]
+                links = state.hypothesis_claim_links[hypothesis.id]
+                linked_claims = tuple(
+                    state.claims[identifier]
+                    for identifier in {*links.supporting, *links.contradicting}
+                )
+                relevant_evidence_ids = {
+                    result.evidence_id for retrieval in contradictions for result in retrieval.results
+                }
+                relevant_evidence_ids.update(
+                    identifier for claim in linked_claims
+                    for identifier in (*claim.supporting_evidence_ids, *claim.contradicting_evidence_ids)
+                )
+                relevant_evidence_ids.update(
+                    identifier for event in state.timeline.values() for identifier in event.evidence_ids
+                )
+                evidence = tuple(item for item in evidence if item.id in relevant_evidence_ids)
+                data["contradiction_retrievals"] = [
+                    retrieval.model_dump(mode="json") for retrieval in contradictions
+                ]
+                data["evidence"] = [item.model_dump(mode="json") for item in evidence]
             else:
                 data["intent"] = "SUPPORT" if job.stage is Stage.SEARCH_SUPPORT else "CONTRADICT"
         elif job.stage is Stage.EXECUTE_FALSIFICATION_TESTS:

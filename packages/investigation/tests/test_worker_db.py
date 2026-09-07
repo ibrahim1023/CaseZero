@@ -65,6 +65,11 @@ class StrictProvider:
                 "contradicting_evidence_ids": c["contradicting_evidence_ids"],
             } for c in state["candidates"]["claims"]]}
         elif stage == "GENERATE_HYPOTHESES":
+            assert set(state["state"]) == {"claims", "timeline", "entities", "questions"}
+            assert not any(
+                key in json.dumps(state["state"])
+                for key in ("model_run_id", "created_at", "source_candidate_ids", "investigation_id")
+            )
             claim_id = next(iter(state["state"]["claims"]))
             output = {"hypotheses": [{
                 "title": title, "description": description, "confidence": confidence,
@@ -83,6 +88,7 @@ class StrictProvider:
         elif stage in {"SEARCH_SUPPORT", "SEARCH_CONTRADICTIONS"}:
             output = {"query_text": "power" if stage == "SEARCH_SUPPORT" else "spark"}
         elif stage == "DESIGN_FALSIFICATION_TESTS":
+            assert len(state["evidence"]) == 1
             hypothesis = state["hypothesis"]
             assert len(state["contradiction_retrievals"]) == 1
             assert not state["contradiction_retrievals"][0]["results"]
