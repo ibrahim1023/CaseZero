@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
+from uuid import UUID
 
 import httpx
 import typer
@@ -16,6 +17,7 @@ from casezero_ntsb.manifest import load_manifest
 from psycopg import AsyncConnection
 
 from casezero_api.ingest import IngestService, IngestSummary
+from casezero_api.investigate import InvestigateError, investigate_from_environment
 from casezero_api.process import ProcessCaseError, process_from_environment
 from casezero_api.repository import AcquisitionRepository
 from casezero_api.settings import HostedSettings
@@ -26,6 +28,22 @@ app = typer.Typer(no_args_is_help=True)
 @app.callback()
 def main() -> None:
     pass
+
+
+@app.command("investigate")
+def investigate_command(
+    ntsb_number: str,
+    once: Annotated[bool, typer.Option()] = False,
+    investigation_id: Annotated[UUID | None, typer.Option()] = None,
+) -> None:
+    try:
+        report = asyncio.run(investigate_from_environment(ntsb_number, once=once, investigation_id=investigation_id))
+    except InvestigateError as error:
+        typer.echo(f"Investigation failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(report.model_dump_json())
+    if report.status.value == "FAILED":
+        raise typer.Exit(code=1)
 
 
 @app.command("process")

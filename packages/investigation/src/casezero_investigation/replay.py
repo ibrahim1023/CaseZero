@@ -75,7 +75,7 @@ class InvestigationProjection(StrictModel):
             "status", "current_stage", "configuration_hash", "event_head_hash",
         })
         state["retrievals"] = {
-            identifier: payload.model_dump(exclude={"kind", "schema_version"})
+            identifier: payload.model_dump(exclude={"kind", "schema_version", "questions"})
             for identifier, payload in self.retrievals.items()
         }
         return {key: _canonical_value(value, key) for key, value in state.items()}
@@ -321,7 +321,10 @@ def _apply(
         _existing(projection.hypotheses, payload.hypothesis_id, "hypothesis")
         if not set(payload.query.entity_ids) <= projection.entities.keys():
             raise ReplayError("retrieval references unknown entity before creation")
-        return projection.model_copy(update={"retrievals": retrievals})
+        questions = projection.questions
+        for question in payload.questions:
+            questions = _created(questions, question.id, question, "question")
+        return projection.model_copy(update={"retrievals": retrievals, "questions": questions})
     if isinstance(payload, StageTransitionPayload):
         if payload.previous_stage is not projection.current_stage:
             raise ReplayError("stage transition starts from wrong stage")

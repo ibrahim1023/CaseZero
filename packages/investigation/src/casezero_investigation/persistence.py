@@ -131,6 +131,8 @@ async def persist_stage_result(
                 intent = "SUPPORT" if job.stage is Stage.SEARCH_SUPPORT else "CONTRADICT"
                 if mutation.query.intent.value != intent:
                     raise ValueError("retrieval intent does not match stage")
+                if mutation.model_run_id is not None:
+                    await _receipt(repository, job, mutation.model_run_id)
                 continue
             record = mutation.record
             if (record.investigation_id, record.case_id) != (before.investigation_id, before.case_id):
@@ -193,6 +195,7 @@ async def persist_stage_result(
             model_run_id = None
             if isinstance(mutation, RetrievalCompletedPayload):
                 target_id = mutation.query_id
+                model_run_id = mutation.model_run_id
             elif isinstance(mutation, HypothesisStatusChangedPayload):
                 target_id = mutation.hypothesis_id
             elif not isinstance(mutation, InvestigationCompletedPayload):
@@ -337,12 +340,18 @@ async def _write(
         await connection.execute(
             "insert into public.retrieval_queries(id,investigation_id,case_id,hypothesis_id,job_id,"
             "intent,query_text,evidence_types,document_types,entity_ids,start_at,end_at,result_limit,"
-            "config_version,query_hash,created_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,clock_timestamp())",
+            "config_version,query_hash,model_run_id,created_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,clock_timestamp())",
             (mutation.query_id, query.investigation_id, query.case_id, mutation.hypothesis_id, job.id,
              query.intent.value, query.query_text, list(query.evidence_types), list(query.document_types),
              list(query.entity_ids), query.start_at, query.end_at, query.limit, query.config_version,
-             canonical_digest(query.canonical_payload())),
+             canonical_digest(query.canonical_payload()), mutation.model_run_id),
         )
+        for question in mutation.questions:
+            await connection.execute(
+                "insert into public.unresolved_questions select * from "
+                "jsonb_populate_record(null::public.unresolved_questions,%s)",
+                (Jsonb(question.model_dump(mode="json")),),
+            )
         for result in mutation.results:
             await connection.execute(
                 "insert into public.retrieval_results values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",

@@ -411,8 +411,11 @@ def test_record_and_query_context_must_match_the_event(history, field) -> None:
 def test_event_attribution_matches_records_and_deterministic_lifecycle(history) -> None:
     for event in history:
         if isinstance(event.payload, RetrievalCompletedPayload):
+            with pytest.raises(ValidationError, match="model_run_id"):
+                InvestigationEvent.model_validate(event.model_dump() | {"model_run_id": MODEL_RUN_ID})
             attributed = InvestigationEvent.model_validate(event.model_dump() | {
                 "model_run_id": MODEL_RUN_ID,
+                "payload": event.payload.model_copy(update={"model_run_id": MODEL_RUN_ID}),
             })
             assert attributed.model_run_id == MODEL_RUN_ID
             continue

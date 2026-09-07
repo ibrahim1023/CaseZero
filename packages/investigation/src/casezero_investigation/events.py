@@ -293,6 +293,13 @@ class RetrievalCompletedPayload(_VersionedPayload):
     hypothesis_id: UUID
     query: EvidenceSearchQuery
     results: tuple[EvidenceSearchResult, ...]
+    model_run_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
+    questions: tuple[UnresolvedQuestion, ...] = Field(default=(), exclude_if=lambda value: not value)
+
+    @field_validator("questions")
+    @classmethod
+    def order_questions(cls, value: tuple[UnresolvedQuestion, ...]) -> tuple[UnresolvedQuestion, ...]:
+        return HypothesisCreatedPayload.order_questions(value)
 
     @field_validator("query")
     @classmethod
@@ -316,6 +323,11 @@ class RetrievalCompletedPayload(_VersionedPayload):
     def require_result_limit(self) -> "RetrievalCompletedPayload":
         if len(self.results) > self.query.limit:
             raise ValueError("retrieval results exceed query limit")
+        if any(
+            q.hypothesis_id != self.hypothesis_id or q.investigation_id != self.query.investigation_id
+            or q.case_id != self.query.case_id for q in self.questions
+        ):
+            raise ValueError("retrieval question context mismatch")
         return self
 
 
@@ -399,7 +411,7 @@ class InvestigationEvent(StrictModel):
             ):
                 raise ValueError("query context must match event investigation and case")
             expected_target_id = payload.query_id
-            expected_model_run_id = self.model_run_id
+            expected_model_run_id = payload.model_run_id
         elif isinstance(payload, HypothesisStatusChangedPayload):
             expected_target_id = payload.hypothesis_id
         else:

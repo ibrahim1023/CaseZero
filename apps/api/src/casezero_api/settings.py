@@ -1,4 +1,5 @@
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -62,6 +63,25 @@ class HostedSettings:
             text_model=values["CASEZERO_TEXT_MODEL"],
             vision_model=values["CASEZERO_VISION_MODEL"],
         )
+
+
+@dataclass(frozen=True, slots=True)
+class BlindSettings:
+    database_url: SecretStr
+    hyperfusion_api_key: SecretStr
+    hyperfusion_base_url: str
+    text_model: str
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, str]) -> "BlindSettings":
+        required = ("DATABASE_URL", "HYPERFUSION_API_KEY", "HYPERFUSION_BASE_URL", "CASEZERO_TEXT_MODEL")
+        if any(not values.get(name) for name in required):
+            raise ValueError("MISSING_BLIND_SETTINGS")
+        url = values["HYPERFUSION_BASE_URL"].rstrip("/")
+        model = values["CASEZERO_TEXT_MODEL"]
+        if url != "https://api.hyperfusion.io/v1" or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*/[a-zA-Z0-9][a-zA-Z0-9_.-]*", model):
+            raise ValueError("INVALID_MODEL_CONFIGURATION")
+        return cls(SecretStr(values["DATABASE_URL"]), SecretStr(values["HYPERFUSION_API_KEY"]), url, model)
 
 
 def _is_local_url(url: str) -> bool:

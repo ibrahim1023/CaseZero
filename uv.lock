@@ -228,6 +228,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "casezero-evidence" },
     { name = "casezero-ingestion" },
+    { name = "casezero-investigation" },
     { name = "casezero-ntsb" },
     { name = "casezero-observability" },
     { name = "fastapi" },
@@ -239,6 +240,7 @@ dependencies = [
 requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
     { name = "casezero-ingestion", editable = "packages/ingestion" },
+    { name = "casezero-investigation", editable = "packages/investigation" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
     { name = "casezero-observability", editable = "packages/observability" },
     { name = "fastapi", specifier = ">=0.116.1" },

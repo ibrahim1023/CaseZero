@@ -1,6 +1,13 @@
 from uuid import UUID
 
-from casezero_evidence import EvidenceItem
+from casezero_evidence import (
+    ClaimCandidate,
+    EntityCandidate,
+    EvidenceItem,
+    SourceDocument,
+    TimelineCandidate,
+)
+from casezero_evidence.models import StrictModel
 from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, JsonValue
@@ -8,11 +15,12 @@ from pydantic import BaseModel, JsonValue
 from casezero_investigation.events import InvestigationEvent
 from casezero_investigation.jobs import (
     FailureCode,
+    InvestigationConfig,
     InvestigationJob,
     ModelRequestAttempt,
     ValidationIssue,
 )
-from casezero_investigation.models import Investigation
+from casezero_investigation.models import Investigation, InvestigationStage
 from casezero_investigation.replay import InvestigationProjection
 
 
@@ -22,6 +30,16 @@ def _record[T: BaseModel](model: type[T], value: object) -> T:
     return model.model_validate(
         {key: value[key] for key in model.model_fields if key in value}, strict=False
     )
+
+
+class CandidateBatch(StrictModel):
+    claims: tuple[ClaimCandidate, ...] = ()
+    entities: tuple[EntityCandidate, ...] = ()
+    timeline: tuple[TimelineCandidate, ...] = ()
+
+    @property
+    def empty(self) -> bool:
+        return not (self.claims or self.entities or self.timeline)
 
 
 class InvestigationRepository:
@@ -44,6 +62,57 @@ class InvestigationRepository:
         if row is None:
             raise LookupError("investigation not accessible")
         return _record(Investigation, row[0])
+
+    async def configuration(self, investigation_id: UUID) -> InvestigationConfig:
+        row = await (await self.connection.execute(
+            "select configuration from public.investigations where id=%s", (investigation_id,),
+        )).fetchone()
+        if row is None:
+            raise LookupError("investigation not accessible")
+        return InvestigationConfig.model_validate(row[0], strict=False)
+
+    async def candidate_batch(self, job: InvestigationJob) -> CandidateBatch:
+        kind = {
+            InvestigationStage.PROMOTE_TIMELINE: "timeline",
+            InvestigationStage.RESOLVE_ENTITIES: "entity",
+            InvestigationStage.PROMOTE_CLAIMS: "claim",
+        }[job.stage]
+        offset = 0 if job.work_key == "case" else int(job.work_key) * 20
+        if offset < 0:
+            raise ValueError("invalid candidate batch")
+        rows = await (await self.connection.execute(
+            "with batch as (select * from public.investigation_candidates "
+            "where investigation_id=%s and kind=%s order by candidate_id offset %s limit 20) "
+            "select p.candidate_id, coalesce(c.candidate,e.candidate,t.candidate) from batch p "
+            "left join public.claim_candidates c on p.kind='claim' and c.id=p.candidate_id "
+            "and c.case_id=p.case_id and c.model_run_id=p.model_run_id "
+            "left join public.entity_candidates e on p.kind='entity' and e.id=p.candidate_id "
+            "and e.case_id=p.case_id and e.model_run_id=p.model_run_id "
+            "left join public.timeline_candidates t on p.kind='timeline' and t.id=p.candidate_id "
+            "and t.case_id=p.case_id and t.model_run_id=p.model_run_id order by p.candidate_id",
+            (job.investigation_id, kind, offset),
+        )).fetchall()
+        if any(row[1] is None for row in rows) or (not rows and job.work_key != "case"):
+            raise ValueError("pinned candidate batch unavailable")
+        if rows and job.work_key == "case":
+            raise ValueError("nonempty candidate set requires a batch job")
+        if kind == "claim":
+            return CandidateBatch(claims=tuple(ClaimCandidate.model_validate(row[1], strict=False) for row in rows))
+        if kind == "entity":
+            return CandidateBatch(entities=tuple(EntityCandidate.model_validate(row[1], strict=False) for row in rows))
+        return CandidateBatch(timeline=tuple(TimelineCandidate.model_validate(row[1], strict=False) for row in rows))
+
+    async def source_metadata(self, investigation_id: UUID, document_id: UUID) -> SourceDocument:
+        row = await (await self.connection.execute(
+            "select to_jsonb(s) from public.source_documents s where s.id=%s and exists ("
+            "select 1 from public.investigation_evidence p join public.evidence_items e "
+            "on e.id=p.evidence_id and e.case_id=p.case_id "
+            "where p.investigation_id=%s and e.source_document_id=s.id and e.case_id=s.case_id)",
+            (document_id, investigation_id),
+        )).fetchone()
+        if row is None:
+            raise PermissionError("source not accessible")
+        return _record(SourceDocument, row[0])
 
     async def claim(self, investigation_id: UUID, worker_id: str) -> InvestigationJob | None:
         row = await (await self.connection.execute(
@@ -169,7 +238,7 @@ class InvestigationRepository:
                         from public.confidence_revision_test_deltas d where d.revision_id=r.id), '[]')))
                     from public.confidence_revisions r where r.investigation_id=i.id), '{}'),
                 'retrievals', coalesce((select jsonb_object_agg(q.id,jsonb_build_object(
-                    'query_id',q.id, 'hypothesis_id',q.hypothesis_id,
+                    'query_id',q.id, 'hypothesis_id',q.hypothesis_id, 'model_run_id',q.model_run_id,
                     'query',jsonb_build_object(
                         'investigation_id',q.investigation_id, 'case_id',q.case_id,
                         'intent',q.intent, 'query_text',q.query_text, 'evidence_types',q.evidence_types,
@@ -193,8 +262,15 @@ class InvestigationRepository:
     async def evidence(self, investigation_id: UUID) -> tuple[EvidenceItem, ...]:
         rows = await (await self.connection.execute(
             "select e.item from public.investigation_evidence p "
-            "join public.evidence_items e on e.id=p.evidence_id and e.model_run_id=p.model_run_id "
-            "where p.investigation_id=%s order by e.id", (investigation_id,),
+            "join public.evidence_items e on e.id=p.evidence_id and e.case_id=p.case_id "
+            "and e.model_run_id is not distinct from p.model_run_id "
+            "join public.source_documents s on s.id=e.source_document_id and s.case_id=e.case_id "
+            "left join public.semantic_unit_completions c on c.structural_unit_id=e.structural_unit_id "
+            "and c.model_run_id=e.model_run_id where p.investigation_id=%s "
+            "and s.visibility='INVESTIGATION_EVIDENCE' and e.review_status in ('NOT_REQUIRED','ACCEPTED') "
+            "and (c.model_run_id is not null or (e.model_run_id is null "
+            "and e.item->>'extraction_method' in ('DETERMINISTIC','HUMAN'))) order by e.id",
+            (investigation_id,),
         )).fetchall()
         return tuple(EvidenceItem.model_validate(row[0], strict=False) for row in rows)
 

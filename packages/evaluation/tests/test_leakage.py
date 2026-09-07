@@ -174,3 +174,17 @@ def test_attack_events_produce_all_incident_codes_in_stable_order() -> None:
         )
     )
     assert report.passed is False
+
+
+def test_investigation_tools_and_retrieval_keep_document_blindness_checks() -> None:
+    assert audit_temporal_leakage((
+        event(1, capability=AccessCapability.INVESTIGATION_TOOL, document_id=None),
+        event(2, capability=AccessCapability.RETRIEVAL),
+    ), context(), set()).passed
+    blocked = audit_temporal_leakage((
+        event(3, capability=AccessCapability.RETRIEVAL, document_id=FINAL_ID),
+        event(4, capability=AccessCapability.RETRIEVAL, document_id=None),
+    ), context(), set())
+    assert {i.code for i in blocked.incidents} == {
+        LeakageIncidentCode.BLIND_BLOCKED_VISIBILITY_READ, LeakageIncidentCode.MALFORMED_AUDIT_EVENT,
+    }

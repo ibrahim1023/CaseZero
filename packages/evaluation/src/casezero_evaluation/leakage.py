@@ -103,7 +103,7 @@ def audit_temporal_leakage(
                 and event.network_host not in allowed_hosts
             ):
                 codes.add(LeakageIncidentCode.FORBIDDEN_BLIND_HOST)
-            if event.capability is AccessCapability.EVIDENCE_READ:
+            if event.capability in {AccessCapability.EVIDENCE_READ, AccessCapability.RETRIEVAL}:
                 if event.target_document_id is None or source is None:
                     codes.add(LeakageIncidentCode.MALFORMED_AUDIT_EVENT)
                 else:
