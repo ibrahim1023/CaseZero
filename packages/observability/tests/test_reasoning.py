@@ -61,6 +61,57 @@ class AccessRecorder:
         self.events.append(event)
 
 
+@pytest.mark.parametrize("response_kind", ("provider_failure", "timeout", "schema_failure", "success"))
+async def test_budgeted_generation_uses_one_http_request_and_closes_its_client(response_kind) -> None:
+    import json
+
+    import httpx
+    import respx
+    from casezero_observability.reasoning import PydanticReasoningModel
+
+    def respond(request):
+        if response_kind == "timeout":
+            raise httpx.ReadTimeout("fixture timeout", request=request)
+        if response_kind == "provider_failure":
+            return httpx.Response(503, json={"error": {"message": "fixture unavailable"}})
+        body = json.loads(request.content)
+        output_tool = body["tools"][0]["function"]["name"]
+        return httpx.Response(200, json={
+            "id": "fixture-response", "object": "chat.completion", "created": 0,
+            "model": "qwen/qwen3-32b", "choices": [{
+                "index": 0, "finish_reason": "tool_calls", "message": {
+                    "role": "assistant", "content": None, "tool_calls": [{
+                        "id": "fixture-output", "type": "function", "function": {
+                            "name": output_tool,
+                            "arguments": "{}" if response_kind == "schema_failure" else '{"value":"measured"}',
+                        },
+                    }],
+                },
+            }], "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16},
+        })
+
+    with respx.mock as http:
+        route = http.post("https://model.example.test/v1/chat/completions").mock(side_effect=respond)
+        model = PydanticReasoningModel.openai_compatible(
+            "qwen/qwen3-32b", "https://model.example.test/v1", "fixture-key",
+            provider="hyperfusion", single_request=True,
+        )
+        request = ReasoningRequest(stage="hypotheses", prompt="synthetic input", prompt_template="test.v1", output_type=Output)
+        if response_kind == "success":
+            result = await model.generate(request)
+            assert result.output.value == "measured"
+            assert (result.input_tokens, result.output_tokens, result.retry_count) == (12, 4, 0)
+        else:
+            with pytest.raises(ModelFailure):
+                await model.generate(request)
+        assert route.call_count == 1
+        assert model._model.client.is_closed()
+        if response_kind == "success":
+            assert (await model.generate(request)).output.value == "measured"
+            assert route.call_count == 2
+            assert model._model.client.is_closed()
+
+
 def test_prompt_hash_uses_versioned_template_not_source_payload() -> None:
     request = ReasoningRequest(
         stage="evidence",

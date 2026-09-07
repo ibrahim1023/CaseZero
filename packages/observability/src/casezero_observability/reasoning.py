@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, ModelAPIError, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.usage import UsageLimits
 
 
 class ModelFailure(RuntimeError):
@@ -209,10 +210,16 @@ class ModelRouter:
 
 
 class PydanticReasoningModel:
-    def __init__(self, name: str, model: OpenAIChatModel, provider: str = "openai-compatible") -> None:
+    def __init__(
+        self, name: str, model: OpenAIChatModel, provider: str = "openai-compatible", *,
+        single_request: bool = False,
+    ) -> None:
         self.name = name
         self.provider = provider
         self._model = model
+        self._single_request = single_request
+        if single_request:
+            model.client.max_retries = 0
 
     @classmethod
     def openai_compatible(
@@ -222,19 +229,27 @@ class PydanticReasoningModel:
         api_key: str,
         *,
         provider: str = "openai-compatible",
+        single_request: bool = False,
     ) -> "PydanticReasoningModel":
         model = OpenAIChatModel(
             name,
             provider=OpenAIProvider(base_url=base_url, api_key=api_key),
         )
-        return cls(name, model, provider)
+        return cls(name, model, provider, single_request=single_request)
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
     ) -> StructuredGeneration[OutputT]:
-        agent = Agent(self._model, output_type=request.output_type, retries=2)
+        agent = Agent(
+            self._model, name=request.stage, output_type=request.output_type,
+            retries=0 if self._single_request else 2,
+        )
         try:
-            result = await agent.run(request.prompt)
+            if self._single_request:
+                async with agent:
+                    result = await agent.run(request.prompt, usage_limits=UsageLimits(request_limit=1))
+            else:
+                result = await agent.run(request.prompt)
         except (UnexpectedModelBehavior, ModelAPIError) as error:
             raise ModelFailure(type(error).__name__) from error
         usage = result.usage
