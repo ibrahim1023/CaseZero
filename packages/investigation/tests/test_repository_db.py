@@ -4,10 +4,16 @@ import pytest
 from casezero_investigation.replay import replay
 from casezero_investigation.repository import InvestigationRepository
 from psycopg import AsyncConnection
-from psycopg.errors import ForeignKeyViolation, ObjectNotInPrerequisiteState, ProgramLimitExceeded
+from psycopg.errors import (
+    ForeignKeyViolation,
+    InvalidParameterValue,
+    ObjectNotInPrerequisiteState,
+    ProgramLimitExceeded,
+)
 from psycopg.types.json import Jsonb
 
 from .db_support import seed_case
+from .test_replay_all import build_history
 
 pytestmark = [
     pytest.mark.db,
@@ -30,6 +36,10 @@ async def test_repository_replays_database_generated_event_hash() -> None:
         repository = InvestigationRepository(connection)
         investigation = await repository.create(case_id, CONFIG)
         events = await repository.events(investigation.id)
+        row = await (await connection.execute(
+            "select payload from investigation_events where id=%s", (events[0].id,),
+        )).fetchone()
+        assert row == (events[0].payload.model_dump(mode="json"),)
         projected = replay(events)
         assert projected.investigation_id == investigation.id
         assert projected.configuration_hash == investigation.configuration_hash
@@ -38,6 +48,70 @@ async def test_repository_replays_database_generated_event_hash() -> None:
         assert job.attempt_count == 1
         request = await repository.reserve_request(job.id, "worker", 1)
         assert request.request_ordinal == 1
+
+
+async def test_database_hash_round_trip_covers_all_payload_types() -> None:
+    from casezero_investigation.canonical import canonical_digest
+    from casezero_investigation.events import EventPayload, InvestigationCompletedPayload
+    from pydantic import TypeAdapter
+
+    history = build_history()
+    async with (
+        await AsyncConnection.connect(os.environ["DATABASE_URL"]) as connection,
+        connection.transaction(force_rollback=True),
+    ):
+        case_id, evidence, _ = await seed_case(connection)
+        await connection.execute("set local role casezero_blind")
+        repository = InvestigationRepository(connection)
+        investigation = await repository.create(case_id, CONFIG)
+        for template in history[1:]:
+            data = template.payload.model_dump_json().replace(
+                str(template.investigation_id), str(investigation.id),
+            ).replace(str(template.case_id), str(case_id))
+            model_run_id = None
+            if template.model_run_id is not None:
+                model_run_id = evidence.model_run_id
+                data = data.replace(str(template.model_run_id), str(model_run_id))
+            payload = TypeAdapter(EventPayload).validate_json(data)
+            if isinstance(payload, InvestigationCompletedPayload):
+                projection = replay(await repository.events(investigation.id))
+                payload = InvestigationCompletedPayload(
+                    projection_hash=canonical_digest(projection.canonical_state()),
+                )
+            target_id = investigation.id if template.target_type == "investigation" else template.target_id
+            await connection.execute(
+                "select public.append_investigation_event(%s,%s,%s,%s,%s,%s)",
+                (investigation.id, template.event_type, template.target_type, target_id,
+                 Jsonb(payload.model_dump(mode="json")), model_run_id),
+            )
+        events = await repository.events(investigation.id)
+        assert {event.event_type for event in events} == {event.event_type for event in history}
+        assert all(event.computed_hash() == event.event_hash for event in events)
+        assert replay(events).status.value == "SUCCEEDED"
+
+
+@pytest.mark.parametrize("version", ("2", 1, None))
+async def test_database_rejects_unsupported_event_payload_versions(version) -> None:
+    async with (
+        await AsyncConnection.connect(os.environ["DATABASE_URL"]) as connection,
+        connection.transaction(force_rollback=True),
+    ):
+        case_id, _, _ = await seed_case(connection)
+        await connection.execute("set local role casezero_blind")
+        repository = InvestigationRepository(connection)
+        investigation = await repository.create(case_id, CONFIG)
+        before = await repository.events(investigation.id)
+        with pytest.raises(InvalidParameterValue):
+            async with connection.transaction():
+                await connection.execute(
+                    "select public.append_investigation_event(%s,'STAGE_TRANSITION',"
+                    "'investigation',%s,%s)",
+                    (investigation.id, investigation.id, Jsonb({
+                        "kind": "STAGE_TRANSITION", "schema_version": version,
+                        "previous_stage": "PROMOTE_TIMELINE", "next_stage": "RESOLVE_ENTITIES",
+                    })),
+                )
+        assert await repository.events(investigation.id) == before
 
 
 async def test_retrieval_reads_only_pinned_case_evidence_under_blind_role() -> None:

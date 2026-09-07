@@ -159,8 +159,14 @@ class HypothesisTest(HypothesisTestDraft):
     status: HypothesisTestStatus
     outcome: TestOutcome | None = None
     model_run_id: UUID | None = None
+    result_evidence_ids: tuple[UUID, ...] = ()
     created_at: datetime
     completed_at: datetime | None = None
+
+    @field_validator("result_evidence_ids")
+    @classmethod
+    def require_unique_result_references(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        return cls.require_unique_references(value)
 
     @field_validator("created_at", "completed_at")
     @classmethod
@@ -174,9 +180,9 @@ class HypothesisTest(HypothesisTestDraft):
         ):
             raise ValueError("successful test requires completed_at and outcome")
         if self.status is HypothesisTestStatus.PENDING and (
-            self.completed_at is not None or self.outcome is not None
+            self.completed_at is not None or self.outcome is not None or self.result_evidence_ids
         ):
-            raise ValueError("pending test cannot have completed_at or outcome")
+            raise ValueError("pending test cannot have completed_at, outcome, or result citations")
         if self.status is HypothesisTestStatus.FAILED:
             if self.completed_at is None:
                 raise ValueError("failed test requires completed_at")

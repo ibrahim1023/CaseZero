@@ -76,7 +76,7 @@ def execute_test(
             "status": HypothesisTestStatus.SUCCEEDED,
             "outcome": outcome,
             "completed_at": completed_at,
-            "evidence_ids": tuple(sorted(set(test.evidence_ids) | used_evidence_ids, key=str)),
+            "result_evidence_ids": tuple(sorted(used_evidence_ids, key=str)),
             "claim_ids": tuple(sorted(test.claim_ids, key=str)),
         }
     )

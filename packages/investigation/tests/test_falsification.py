@@ -221,7 +221,7 @@ def test_presence_matches_explicit_metadata_and_records_ordered_evidence() -> No
     assert result == execute_test(test, evidence[::-1], (), (), completed_at)
     assert result.status is HypothesisTestStatus.SUCCEEDED
     assert result.outcome is Outcome.SURVIVED
-    assert result.evidence_ids == (UUID(int=2), UUID(int=5))
+    assert result.result_evidence_ids == (UUID(int=2), UUID(int=5))
     assert result.claim_ids == ()
     assert result.completed_at == completed_at
     assert result.model_run_id is None
@@ -240,7 +240,7 @@ def test_presence_can_check_named_existing_evidence_without_a_metadata_selector(
     test = pending_test(evidence_ids=(item.id,))
     result = execute_test(test, (item,), (), (), NOW)
     assert result.outcome is Outcome.SURVIVED
-    assert result.evidence_ids == (item.id,)
+    assert result.result_evidence_ids == (item.id,)
 
 
 @pytest.mark.parametrize("empty", [True, False])
@@ -264,7 +264,7 @@ def test_presence_without_ids_or_selectors_does_not_turn_prose_into_an_expectati
     evidence = () if empty else (evidence_item(),)
     result = execute_test(test, evidence, (), (), NOW)
     assert result.outcome is Outcome.INCONCLUSIVE
-    assert result.evidence_ids == ()
+    assert result.result_evidence_ids == ()
 
 
 def test_presence_does_not_search_outside_explicit_input_ids() -> None:
@@ -276,6 +276,7 @@ def test_presence_does_not_search_outside_explicit_input_ids() -> None:
     result = execute_test(test, (selected, evidence_item(2, EvidenceType.TIME_SERIES)), (), (), NOW)
     assert result.outcome is Outcome.EXPECTED_EVIDENCE_MISSING
     assert result.evidence_ids == (selected.id,)
+    assert result.result_evidence_ids == ()
 
 
 @pytest.mark.parametrize(
@@ -292,7 +293,7 @@ def test_temporal_consistency_compares_exact_timestamps(seconds: int, expected: 
     result = execute_test(test, evidence, (), events, NOW)
     assert result == execute_test(test, evidence[::-1], (), events[::-1], NOW)
     assert result.outcome is expected
-    assert result.evidence_ids == (UUID(int=1), UUID(int=2))
+    assert result.result_evidence_ids == (UUID(int=1), UUID(int=2))
 
 
 @pytest.mark.parametrize("position", [0, 1])
@@ -324,7 +325,7 @@ def test_temporal_consistency_without_active_evidence_is_inconclusive() -> None:
     events = (timeline_event(10, NOW), timeline_event(11, NOW + timedelta(seconds=1)))
     result = execute_test(pending_test(FalsificationType.TEMPORAL_CONSISTENCY), (), (), events, NOW)
     assert result.outcome is Outcome.INCONCLUSIVE
-    assert result.evidence_ids == ()
+    assert result.result_evidence_ids == ()
 
 
 @pytest.mark.parametrize(
@@ -350,7 +351,7 @@ def test_claim_contradiction_uses_explicit_polarities_of_available_evidence(
     assert result.outcome is expected
     assert result.claim_ids == (target.id,)
     if not selected:
-        assert result.evidence_ids == (UUID(int=1), UUID(int=2))
+        assert result.result_evidence_ids == (UUID(int=1), UUID(int=2))
 
 
 def test_claim_contradiction_does_not_invent_semantic_conflicts_from_opposite_words() -> None:
@@ -366,7 +367,7 @@ def test_claim_contradiction_without_active_linked_evidence_is_inconclusive() ->
     test = pending_test(FalsificationType.CLAIM_CONTRADICTION, claim_ids=(target.id,))
     result = execute_test(test, (evidence_item(),), (target,), (), NOW)
     assert result.outcome is Outcome.INCONCLUSIVE
-    assert result.evidence_ids == ()
+    assert result.result_evidence_ids == ()
 
 
 def test_claim_contradiction_needs_support_for_every_selected_claim_to_survive() -> None:
@@ -381,7 +382,7 @@ def test_claim_contradiction_without_selected_claims_is_inconclusive() -> None:
         pending_test(FalsificationType.CLAIM_CONTRADICTION), (evidence_item(),), (claim(),), (), NOW
     )
     assert result.outcome is Outcome.INCONCLUSIVE
-    assert result.claim_ids == result.evidence_ids == ()
+    assert result.claim_ids == result.result_evidence_ids == ()
 
 
 def test_ambiguous_polarity_for_the_same_evidence_is_inconclusive() -> None:

@@ -1,16 +1,14 @@
 from datetime import UTC, datetime
 
 import pytest
-from casezero_investigation import (
+from casezero_investigation.events import (
     ClaimCreatedPayload,
     HypothesisCreatedPayload,
     InvestigationEvent,
-    InvestigationStage,
     InvestigationStartedPayload,
-    InvestigationStatus,
-    ReplayError,
-    replay,
 )
+from casezero_investigation.models import InvestigationStage, InvestigationStatus
+from casezero_investigation.replay import ReplayError, replay
 
 from .test_events import CASE_ID, INVESTIGATION_ID, claim, hypothesis
 
@@ -26,6 +24,7 @@ def event(sequence, event_type, target_type, target_id, payload, previous=None):
         target_type=target_type,
         target_id=target_id,
         payload=payload,
+        model_run_id=getattr(getattr(payload, "record", None), "model_run_id", None),
         previous_event_hash=previous,
         event_hash="0" * 64,
         hash_algorithm="postgres-investigation-event-v1",
@@ -55,7 +54,9 @@ def test_replay_reconstructs_created_claim_and_hypothesis() -> None:
     )
     proposed = event(
         3, "HYPOTHESIS_CREATED", "hypothesis", hypothesis_record.id,
-        HypothesisCreatedPayload(record=hypothesis_record), claimed.event_hash,
+        HypothesisCreatedPayload(
+            record=hypothesis_record, supporting_claim_ids=(claim_record.id,),
+        ), claimed.event_hash,
     )
     projection = replay((started, claimed, proposed))
     assert projection.claims == {claim_record.id: claim_record}
