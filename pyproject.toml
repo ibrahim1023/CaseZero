@@ -10,10 +10,11 @@ dependencies = [
   "casezero-investigation",
   "casezero-ntsb",
   "casezero-observability",
+  "casezero-retrieval",
 ]
 
 [tool.uv.workspace]
-members = ["packages/evidence", "packages/evaluation", "packages/ingestion", "packages/investigation", "packages/ntsb", "packages/observability", "apps/api"]
+members = ["packages/evidence", "packages/evaluation", "packages/ingestion", "packages/investigation", "packages/retrieval", "packages/ntsb", "packages/observability", "apps/api"]
 
 [tool.uv.sources]
 casezero-api = { workspace = true }
@@ -23,6 +24,7 @@ casezero-ingestion = { workspace = true }
 casezero-investigation = { workspace = true }
 casezero-ntsb = { workspace = true }
 casezero-observability = { workspace = true }
+casezero-retrieval = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -44,4 +46,4 @@ line-length = 100
 python_version = "3.12"
 strict = true
 explicit_package_bases = true
-packages = ["casezero_evidence", "casezero_evaluation", "casezero_ingestion", "casezero_investigation", "casezero_ntsb", "casezero_observability", "casezero_api"]
+packages = ["casezero_evidence", "casezero_evaluation", "casezero_ingestion", "casezero_investigation", "casezero_retrieval", "casezero_ntsb", "casezero_observability", "casezero_api"]

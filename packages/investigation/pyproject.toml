@@ -2,7 +2,12 @@
 name = "casezero-investigation"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["casezero-evidence", "pydantic>=2.11.7"]
+dependencies = [
+    "casezero-evidence",
+    "casezero-observability",
+    "casezero-retrieval",
+    "pydantic>=2.11.7",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -13,3 +18,5 @@ packages = ["src/casezero_investigation"]
 
 [tool.uv.sources]
 casezero-evidence = { workspace = true }
+casezero-retrieval = { workspace = true }
+casezero-observability = { workspace = true }

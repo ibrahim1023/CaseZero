@@ -26,6 +26,7 @@ members = [
     "casezero-investigation",
     "casezero-ntsb",
     "casezero-observability",
+    "casezero-retrieval",
 ]
 
 [[package]]
@@ -181,6 +182,7 @@ dependencies = [
     { name = "casezero-investigation" },
     { name = "casezero-ntsb" },
     { name = "casezero-observability" },
+    { name = "casezero-retrieval" },
 ]
 
 [package.dev-dependencies]
@@ -204,6 +206,7 @@ requires-dist = [
     { name = "casezero-investigation", editable = "packages/investigation" },
     { name = "casezero-ntsb", editable = "packages/ntsb" },
     { name = "casezero-observability", editable = "packages/observability" },
+    { name = "casezero-retrieval", editable = "packages/retrieval" },
 ]
 
 [package.metadata.requires-dev]
@@ -304,12 +307,16 @@ version = "0.1.0"
 source = { editable = "packages/investigation" }
 dependencies = [
     { name = "casezero-evidence" },
+    { name = "casezero-observability" },
+    { name = "casezero-retrieval" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "casezero-observability", editable = "packages/observability" },
+    { name = "casezero-retrieval", editable = "packages/retrieval" },
     { name = "pydantic", specifier = ">=2.11.7" },
 ]
 
@@ -345,6 +352,23 @@ dependencies = [
 requires-dist = [
     { name = "casezero-evidence", editable = "packages/evidence" },
     { name = "pydantic-ai-slim", extras = ["openai"], specifier = "==2.30.0" },
+]
+
+[[package]]
+name = "casezero-retrieval"
+version = "0.1.0"
+source = { editable = "packages/retrieval" }
+dependencies = [
+    { name = "casezero-evidence" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "casezero-evidence", editable = "packages/evidence" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.9" },
+    { name = "pydantic", specifier = ">=2.11.7" },
 ]
 
 [[package]]
