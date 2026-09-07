@@ -37,7 +37,18 @@ PHASE3_TABLES = {
     "confidence_revisions",
     "confidence_revision_test_deltas",
 }
-EXPECTED_TABLES = PHASE2_TABLES | PHASE3_TABLES
+PHASE3_OPERATIONAL_TABLES = {
+    "investigation_evidence",
+    "investigation_candidates",
+    "investigation_jobs",
+    "investigation_job_attempts",
+    "model_request_attempts",
+    "investigation_events",
+    "investigation_spans",
+    "retrieval_queries",
+    "retrieval_results",
+}
+EXPECTED_TABLES = PHASE2_TABLES | PHASE3_TABLES | PHASE3_OPERATIONAL_TABLES
 
 
 def state(**changes) -> HostedState:
@@ -79,6 +90,17 @@ def test_phase3_canonical_tables_and_forced_rls_are_required() -> None:
     )
     assert any("claims" in error for error in errors)
     assert any("hypotheses" in error for error in errors)
+    assert any("RLS" in error for error in errors)
+
+
+def test_phase3_runtime_tables_and_forced_rls_are_required() -> None:
+    errors = evaluate_hosted_state(state(
+        tables=EXPECTED_TABLES - PHASE3_OPERATIONAL_TABLES,
+        rls_tables=EXPECTED_TABLES - PHASE3_OPERATIONAL_TABLES,
+    ))
+    assert any("investigation_jobs" in error for error in errors)
+    assert any("investigation_events" in error for error in errors)
+    assert any("retrieval_results" in error for error in errors)
     assert any("RLS" in error for error in errors)
 
 

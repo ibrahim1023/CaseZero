@@ -30,6 +30,15 @@ EXPECTED_TABLES = {
     "hypothesis_tests",
     "confidence_revisions",
     "confidence_revision_test_deltas",
+    "investigation_evidence",
+    "investigation_candidates",
+    "investigation_jobs",
+    "investigation_job_attempts",
+    "model_request_attempts",
+    "investigation_events",
+    "investigation_spans",
+    "retrieval_queries",
+    "retrieval_results",
 }
 EXPECTED_BUCKETS = {"casezero-sources", "casezero-derived"}
 
