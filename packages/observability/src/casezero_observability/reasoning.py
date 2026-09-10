@@ -17,7 +17,7 @@ from casezero_evidence import (
 )
 from casezero_evidence.access import AccessAuditRecorder
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelAPIError, UnexpectedModelBehavior
+from pydantic_ai import Agent, ModelAPIError, ModelSettings, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits
@@ -230,10 +230,13 @@ class PydanticReasoningModel:
         *,
         provider: str = "openai-compatible",
         single_request: bool = False,
+        max_tokens: int | None = None,
     ) -> "PydanticReasoningModel":
+        settings = ModelSettings(max_tokens=max_tokens) if max_tokens is not None else None
         model = OpenAIChatModel(
             name,
             provider=OpenAIProvider(base_url=base_url, api_key=api_key),
+            settings=settings,
         )
         return cls(name, model, provider, single_request=single_request)
 
