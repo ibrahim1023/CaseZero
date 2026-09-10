@@ -11,10 +11,10 @@ def values() -> dict[str, str]:
         "SUPABASE_JWKS_URL": "https://project.supabase.co/auth/v1/.well-known/jwks.json",
         "SUPABASE_SOURCE_BUCKET": "casezero-sources",
         "SUPABASE_DERIVED_BUCKET": "casezero-derived",
-        "HYPERFUSION_API_KEY": "secret-hyperfusion-key",
-        "HYPERFUSION_BASE_URL": "https://api.hyperfusion.io/v1",
-        "CASEZERO_TEXT_MODEL": "qwen/qwen3-32b",
-        "CASEZERO_VISION_MODEL": "google/gemma-4-31b-it",
+        "GROQ_API_KEY": "secret-groq-key",
+        "GROQ_BASE_URL": "https://api.groq.com/openai/v1",
+        "CASEZERO_TEXT_MODEL": "llama-3.3-70b-versatile",
+        "CASEZERO_VISION_MODEL": "meta-llama/llama-4-scout-instruct",
     }
 
 
@@ -43,5 +43,5 @@ def test_settings_repr_redacts_secrets() -> None:
     settings = HostedSettings.from_mapping(values())
     rendered = repr(settings)
     assert "secret-service-key" not in rendered
-    assert "secret-hyperfusion-key" not in rendered
+    assert "secret-groq-key" not in rendered
     assert "**********" in rendered

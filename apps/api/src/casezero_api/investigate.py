@@ -70,8 +70,8 @@ async def investigate_from_environment(
                 if await repository.configuration(investigation.id) != config:
                     raise InvestigateError("RUNTIME_CONFIGURATION_MISMATCH")
                 model = PydanticReasoningModel.openai_compatible(
-                    settings.text_model, settings.hyperfusion_base_url,
-                    settings.hyperfusion_api_key.get_secret_value(), provider="hyperfusion", single_request=True,
+                    settings.text_model, settings.groq_base_url,
+                    settings.groq_api_key.get_secret_value(), provider="groq", single_request=True,
                 )
                 worker = Worker(repository, investigation, model, worker_id=str(uuid4()))
                 while await worker.run_once():

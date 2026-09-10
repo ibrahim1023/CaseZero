@@ -95,7 +95,7 @@ def test_allowed_blind_database_and_model_events_pass() -> None:
             capability=AccessCapability.MODEL_INFERENCE,
             operation=AccessOperation.NETWORK,
             document_id=None,
-            host="api.hyperfusion.io",
+            host="api.groq.com",
         ),
         event(
             3,
@@ -105,7 +105,7 @@ def test_allowed_blind_database_and_model_events_pass() -> None:
     )
 
     report = audit_temporal_leakage(
-        events, context(), allowed_hosts={"api.hyperfusion.io"}
+        events, context(), allowed_hosts={"api.groq.com"}
     )
 
     assert report.passed is True
@@ -159,7 +159,7 @@ def test_attack_events_produce_all_incident_codes_in_stable_order() -> None:
     )
 
     report = audit_temporal_leakage(
-        events, late_context, allowed_hosts={"api.hyperfusion.io"}
+        events, late_context, allowed_hosts={"api.groq.com"}
     )
 
     assert {incident.code for incident in report.incidents} == set(LeakageIncidentCode)

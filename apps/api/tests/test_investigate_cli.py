@@ -8,9 +8,9 @@ from typer.testing import CliRunner
 def settings_values():
     return {
         "DATABASE_URL": "postgresql://user:password@db.example.test/casezero",
-        "HYPERFUSION_API_KEY": "private-key",
-        "HYPERFUSION_BASE_URL": "https://api.hyperfusion.io/v1",
-        "CASEZERO_TEXT_MODEL": "qwen/qwen3-32b",
+        "GROQ_API_KEY": "private-key",
+        "GROQ_BASE_URL": "https://api.groq.com/openai/v1",
+        "CASEZERO_TEXT_MODEL": "llama-3.3-70b-versatile",
     }
 
 
@@ -30,18 +30,18 @@ def test_cli_refuses_without_payload(monkeypatch):
 
 def test_blind_settings_do_not_require_storage_secrets():
     settings = BlindSettings.from_mapping(settings_values())
-    assert settings.text_model == "qwen/qwen3-32b"
+    assert settings.text_model == "llama-3.3-70b-versatile"
     assert "private-key" not in repr(settings)
     assert not hasattr(settings, "supabase_secret_key")
 
 
 @pytest.mark.parametrize("url", [
-    "http://api.hyperfusion.io/v1", "https://api.hyperfusion.io.evil.test/v1",
-    "https://user:secret@api.hyperfusion.io/v1", "https://api.hyperfusion.io/v1?key=secret",
+    "http://api.groq.com/openai/v1", "https://api.groq.com.evil.test/openai/v1",
+    "https://user:secret@api.groq.com/openai/v1", "https://api.groq.com/openai/v1?key=secret",
 ])
 def test_blind_settings_reject_unapproved_endpoints_without_values(url):
     with pytest.raises(ValueError, match="INVALID_MODEL_CONFIGURATION") as error:
-        BlindSettings.from_mapping(settings_values() | {"HYPERFUSION_BASE_URL": url})
+        BlindSettings.from_mapping(settings_values() | {"GROQ_BASE_URL": url})
     assert "secret" not in str(error.value)
 
 

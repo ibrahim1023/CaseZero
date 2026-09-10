@@ -157,9 +157,9 @@ def runtime_configuration(model: str, git_sha: str) -> InvestigationConfig:
 class Worker:
     def __init__(
         self, repository: InvestigationRepository, investigation: Investigation, model: StructuredModel,
-        *, worker_id: str, network_host: str = "api.hyperfusion.io",
+        *, worker_id: str, network_host: str = "api.groq.com",
     ) -> None:
-        if network_host != "api.hyperfusion.io":
+        if network_host != "api.groq.com":
             raise ValueError("INVALID_MODEL_HOST")
         if not repository.connection.autocommit:
             raise ValueError("AUTOCOMMIT_REQUIRED")

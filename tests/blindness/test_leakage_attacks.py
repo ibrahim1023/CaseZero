@@ -49,7 +49,7 @@ def test_every_forbidden_blind_capability_is_an_incident(
     )
 
     report = audit_temporal_leakage(
-        (event,), context, allowed_hosts={"api.hyperfusion.io"}
+        (event,), context, allowed_hosts={"api.groq.com"}
     )
 
     assert report.passed is False
@@ -78,7 +78,7 @@ def test_unapproved_host_and_wrong_case_cannot_hide_in_audit_output() -> None:
     )
 
     report = audit_temporal_leakage(
-        (event,), context, allowed_hosts={"api.hyperfusion.io"}
+        (event,), context, allowed_hosts={"api.groq.com"}
     )
 
     assert {incident.code for incident in report.incidents} == {

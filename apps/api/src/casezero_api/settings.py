@@ -17,8 +17,8 @@ class HostedSettings:
     supabase_jwks_url: str
     source_bucket: str
     derived_bucket: str
-    hyperfusion_api_key: SecretStr
-    hyperfusion_base_url: str
+    groq_api_key: SecretStr
+    groq_base_url: str
     text_model: str
     vision_model: str
 
@@ -36,8 +36,8 @@ class HostedSettings:
             "SUPABASE_JWKS_URL": "supabase_jwks_url",
             "SUPABASE_SOURCE_BUCKET": "source_bucket",
             "SUPABASE_DERIVED_BUCKET": "derived_bucket",
-            "HYPERFUSION_API_KEY": "hyperfusion_api_key",
-            "HYPERFUSION_BASE_URL": "hyperfusion_base_url",
+            "GROQ_API_KEY": "groq_api_key",
+            "GROQ_BASE_URL": "groq_base_url",
             "CASEZERO_TEXT_MODEL": "text_model",
             "CASEZERO_VISION_MODEL": "vision_model",
         }
@@ -58,8 +58,8 @@ class HostedSettings:
             supabase_jwks_url=values["SUPABASE_JWKS_URL"],
             source_bucket=values["SUPABASE_SOURCE_BUCKET"],
             derived_bucket=values["SUPABASE_DERIVED_BUCKET"],
-            hyperfusion_api_key=SecretStr(values["HYPERFUSION_API_KEY"]),
-            hyperfusion_base_url=values["HYPERFUSION_BASE_URL"].rstrip("/"),
+            groq_api_key=SecretStr(values["GROQ_API_KEY"]),
+            groq_base_url=values["GROQ_BASE_URL"].rstrip("/"),
             text_model=values["CASEZERO_TEXT_MODEL"],
             vision_model=values["CASEZERO_VISION_MODEL"],
         )
@@ -68,20 +68,20 @@ class HostedSettings:
 @dataclass(frozen=True, slots=True)
 class BlindSettings:
     database_url: SecretStr
-    hyperfusion_api_key: SecretStr
-    hyperfusion_base_url: str
+    groq_api_key: SecretStr
+    groq_base_url: str
     text_model: str
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str]) -> "BlindSettings":
-        required = ("DATABASE_URL", "HYPERFUSION_API_KEY", "HYPERFUSION_BASE_URL", "CASEZERO_TEXT_MODEL")
+        required = ("DATABASE_URL", "GROQ_API_KEY", "GROQ_BASE_URL", "CASEZERO_TEXT_MODEL")
         if any(not values.get(name) for name in required):
             raise ValueError("MISSING_BLIND_SETTINGS")
-        url = values["HYPERFUSION_BASE_URL"].rstrip("/")
+        url = values["GROQ_BASE_URL"].rstrip("/")
         model = values["CASEZERO_TEXT_MODEL"]
-        if url != "https://api.hyperfusion.io/v1" or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*/[a-zA-Z0-9][a-zA-Z0-9_.-]*", model):
+        if url != "https://api.groq.com/openai/v1" or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_./-]*", model):
             raise ValueError("INVALID_MODEL_CONFIGURATION")
-        return cls(SecretStr(values["DATABASE_URL"]), SecretStr(values["HYPERFUSION_API_KEY"]), url, model)
+        return cls(SecretStr(values["DATABASE_URL"]), SecretStr(values["GROQ_API_KEY"]), url, model)
 
 
 def _is_local_url(url: str) -> bool:

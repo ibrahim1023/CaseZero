@@ -186,7 +186,7 @@ async def test_postgres_recorder_persists_closed_event_fields_only() -> None:
         actor_role=RuntimeActor.BLIND,
         capability=AccessCapability.MODEL_INFERENCE,
         operation=AccessOperation.NETWORK,
-        network_host="api.hyperfusion.io",
+        network_host="api.groq.com",
         allowed=True,
         reason_code=AuditReasonCode.ALLOWED_MODEL_HOST,
         occurred_at=NOW,
@@ -202,7 +202,7 @@ async def test_postgres_recorder_persists_closed_event_fields_only() -> None:
         "MODEL_INFERENCE",
         "NETWORK",
         None,
-        "api.hyperfusion.io",
+        "api.groq.com",
         True,
         "ALLOWED_MODEL_HOST",
     )

@@ -679,13 +679,13 @@ def _model_router(
 ) -> ModelRouter:
     primary = PydanticReasoningModel.openai_compatible(
         settings.text_model,
-        settings.hyperfusion_base_url,
-        settings.hyperfusion_api_key.get_secret_value(),
-        provider="hyperfusion",
+        settings.groq_base_url,
+        settings.groq_api_key.get_secret_value(),
+        provider="groq",
     )
-    network_host = urlparse(settings.hyperfusion_base_url).hostname
+    network_host = urlparse(settings.groq_base_url).hostname
     if network_host is None:
-        raise ValueError("Hyperfusion base URL must include a hostname")
+        raise ValueError("Groq base URL must include a hostname")
     return ModelRouter(
         primary,
         recorder=repository,

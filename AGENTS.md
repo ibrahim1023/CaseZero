@@ -72,7 +72,7 @@ below remain mandatory.
 - A locked assessment is immutable. Lock records assessment hash, evidence-set
   hash, model + prompt versions, timestamp, system version.
 - Default tests and evals make no live model, NTSB, Context.dev, ElevenLabs,
-  or Hyperfusion calls. Live checks require explicit opt-in env flags and never
+  or Groq calls. Live checks require explicit opt-in env flags and never
   run in ordinary CI.
 - Source artifacts are immutable after ingestion (SHA-256). Never commit source
   artifacts; commit manifests + URLs + checksums + retrieval scripts.
