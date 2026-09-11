@@ -112,6 +112,47 @@ async def test_budgeted_generation_uses_one_http_request_and_closes_its_client(r
             assert model._model.client.is_closed()
 
 
+async def test_generation_paces_consecutive_provider_requests(monkeypatch) -> None:
+    import httpx
+    import respx
+    from casezero_observability import reasoning
+
+    waits: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        waits.append(delay)
+
+    monkeypatch.setattr(reasoning.asyncio, "sleep", sleep)
+    response = {
+        "id": "fixture-response", "object": "chat.completion", "created": 0,
+        "model": "fixture", "choices": [{
+            "index": 0, "finish_reason": "tool_calls", "message": {
+                "role": "assistant", "content": None, "tool_calls": [{
+                    "id": "fixture-output", "type": "function", "function": {
+                        "name": "final_result", "arguments": '{"value":"measured"}',
+                    },
+                }],
+            },
+        }], "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16},
+    }
+    with respx.mock as http:
+        http.post("https://model.example.test/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=response)
+        )
+        model = reasoning.PydanticReasoningModel.openai_compatible(
+            "fixture", "https://model.example.test/v1", "fixture-key",
+            single_request=True, minimum_request_interval_seconds=60,
+        )
+        request = ReasoningRequest(
+            stage="test", prompt="input", prompt_template="test.v1", output_type=Output,
+        )
+        await model.generate(request)
+        await model.generate(request)
+
+    assert len(waits) == 1
+    assert 59 < waits[0] <= 60
+
+
 def test_prompt_hash_uses_versioned_template_not_source_payload() -> None:
     request = ReasoningRequest(
         stage="evidence",

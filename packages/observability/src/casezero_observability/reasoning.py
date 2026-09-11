@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import time
 from collections.abc import Callable
@@ -212,12 +213,14 @@ class ModelRouter:
 class PydanticReasoningModel:
     def __init__(
         self, name: str, model: OpenAIChatModel, provider: str = "openai-compatible", *,
-        single_request: bool = False,
+        single_request: bool = False, minimum_request_interval_seconds: float = 0,
     ) -> None:
         self.name = name
         self.provider = provider
         self._model = model
         self._single_request = single_request
+        self._minimum_request_interval_seconds = minimum_request_interval_seconds
+        self._last_request_at: float | None = None
         if single_request:
             model.client.max_retries = 0
 
@@ -231,6 +234,7 @@ class PydanticReasoningModel:
         provider: str = "openai-compatible",
         single_request: bool = False,
         max_tokens: int | None = None,
+        minimum_request_interval_seconds: float = 0,
     ) -> "PydanticReasoningModel":
         settings = ModelSettings(max_tokens=max_tokens) if max_tokens is not None else None
         model = OpenAIChatModel(
@@ -238,11 +242,20 @@ class PydanticReasoningModel:
             provider=OpenAIProvider(base_url=base_url, api_key=api_key),
             settings=settings,
         )
-        return cls(name, model, provider, single_request=single_request)
+        return cls(
+            name, model, provider, single_request=single_request,
+            minimum_request_interval_seconds=minimum_request_interval_seconds,
+        )
 
     async def generate[OutputT: BaseModel](
         self, request: ReasoningRequest[OutputT]
     ) -> StructuredGeneration[OutputT]:
+        now = time.monotonic()
+        if self._last_request_at is not None:
+            delay = self._minimum_request_interval_seconds - (now - self._last_request_at)
+            if delay > 0:
+                await asyncio.sleep(delay)
+        self._last_request_at = time.monotonic()
         agent = Agent(
             self._model, name=request.stage, output_type=request.output_type,
             retries=0 if self._single_request else 2,
