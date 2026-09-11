@@ -44,7 +44,7 @@ PROMOTION_ENTITIES_PROMPT = (
 PROMOTION_TIMELINE_PROMPT = (
     "casezero.promotion.timeline.v1: " + _PROMOTION_RULES
     + "Copy only previously normalized aware UTC timestamps and their original time precision. "
-    "Never infer an absolute timestamp from a relative or unknown time. Preserve descriptions; "
+    "For relative, approximate, or unknown precision, copy a supplied anchored timestamp only; never infer one. Preserve descriptions; "
     "merge only identical normalized descriptions with identical time and precision. "
     "Return bounded model confidence, not a calibrated probability."
 )
@@ -146,11 +146,6 @@ class TimelineDraft(_EvidenceDraft):
     def require_time_precision(self) -> "TimelineDraft":
         if self.time_precision is TimePrecision.EXACT and self.occurred_at is None:
             raise ValueError("exact time requires occurred_at")
-        if (
-            self.time_precision in (TimePrecision.UNKNOWN, TimePrecision.RELATIVE)
-            and self.occurred_at is not None
-        ):
-            raise ValueError("unknown or relative time cannot carry an absolute occurred_at")
         return self
 
 

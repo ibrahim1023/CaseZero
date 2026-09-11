@@ -553,10 +553,11 @@ def test_timeline_model_output_only_accepts_aware_utc(occurred_at: datetime) -> 
         timeline_draft(occurred_at=occurred_at)
 
 
-@pytest.mark.parametrize("precision", [TimePrecision.UNKNOWN, TimePrecision.RELATIVE])
-def test_unknown_and_relative_drafts_cannot_carry_invented_absolute_times(precision: TimePrecision) -> None:
-    with pytest.raises(ValidationError, match="time|occurred_at"):
-        timeline_draft(time_precision=precision)
+@pytest.mark.parametrize(
+    "precision", [TimePrecision.UNKNOWN, TimePrecision.RELATIVE, TimePrecision.APPROXIMATE]
+)
+def test_ambiguous_drafts_may_carry_source_anchored_times(precision: TimePrecision) -> None:
+    assert timeline_draft(time_precision=precision).occurred_at == OCCURRED_AT
     with pytest.raises(ValidationError, match="time|occurred_at"):
         timeline_draft(occurred_at=None, time_precision=TimePrecision.EXACT)
 
