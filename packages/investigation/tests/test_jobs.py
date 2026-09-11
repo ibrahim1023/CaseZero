@@ -15,6 +15,8 @@ from casezero_investigation import (
     ValidationIssue,
     job_input_payload,
 )
+from casezero_investigation.repository import CandidateBatch
+from casezero_investigation.worker import _promotion_prompt_data
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 5, tzinfo=UTC)
@@ -29,6 +31,15 @@ def config() -> InvestigationConfig:
         retrieval_version="fts-v1",
         confidence_rule="weighted-delta-v1",
     )
+
+
+def test_promotion_prompt_contains_only_candidates_and_active_evidence_ids() -> None:
+    evidence_ids = (UUID(int=2), UUID(int=1))
+
+    assert _promotion_prompt_data(CandidateBatch(), evidence_ids) == {
+        "candidates": CandidateBatch().model_dump(mode="json"),
+        "active_evidence_ids": [str(UUID(int=1)), str(UUID(int=2))],
+    }
 
 
 def test_config_payload_contains_fixed_execution_limits() -> None:

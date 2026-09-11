@@ -106,6 +106,15 @@ PROMPTS = {
 MAX_INPUT_BYTES = 180_000
 
 
+def _promotion_prompt_data(
+    batch: CandidateBatch, active_evidence_ids: tuple[UUID, ...],
+) -> dict[str, object]:
+    return {
+        "candidates": batch.model_dump(mode="json"),
+        "active_evidence_ids": [str(identifier) for identifier in sorted(active_evidence_ids, key=str)],
+    }
+
+
 def _prompt_state(state: InvestigationProjection) -> dict[str, object]:
     return {
         "claims": {
@@ -236,8 +245,7 @@ class Worker:
             candidate_ids.update(eid for event in batch.timeline for eid in event.evidence_ids)
             candidate_ids.update(eid for claim in batch.claims for eid in (*claim.supporting_evidence_ids, *claim.contradicting_evidence_ids))
             evidence = tuple(e for e in evidence if e.id in candidate_ids)
-            data = {"candidates": batch.model_dump(mode="json"), "evidence": [e.model_dump(mode="json") for e in evidence]}
-            data["sources"] = [(await tools.get_source_document(identifier)).model_dump(mode="json") for identifier in sorted({e.source_document_id for e in evidence})]
+            data = _promotion_prompt_data(batch, tuple(item.id for item in evidence))
         elif job.stage is Stage.GENERATE_HYPOTHESES:
             if not claims:
                 raise StageExhausted(FailureCode.REFERENCE_INVALID)
