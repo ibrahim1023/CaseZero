@@ -112,6 +112,38 @@ async def test_budgeted_generation_uses_one_http_request_and_closes_its_client(r
             assert model._model.client.is_closed()
 
 
+async def test_generation_uses_strict_native_output_when_requested() -> None:
+    import json
+
+    import httpx
+    import respx
+    from casezero_observability.reasoning import PydanticReasoningModel
+
+    def respond(request):
+        body = json.loads(request.content)
+        assert body["response_format"]["type"] == "json_schema"
+        assert body["response_format"]["json_schema"]["strict"] is True
+        return httpx.Response(200, json={
+            "id": "fixture-response", "object": "chat.completion", "created": 0,
+            "model": "fixture", "choices": [{
+                "index": 0, "finish_reason": "stop",
+                "message": {"role": "assistant", "content": '{"value":"measured"}'},
+            }], "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16},
+        })
+
+    with respx.mock as http:
+        http.post("https://model.example.test/v1/chat/completions").mock(side_effect=respond)
+        model = PydanticReasoningModel.openai_compatible(
+            "fixture", "https://model.example.test/v1", "fixture-key",
+            single_request=True, strict_native_output=True,
+        )
+        result = await model.generate(ReasoningRequest(
+            stage="test", prompt="input", prompt_template="test.v1", output_type=Output,
+        ))
+
+    assert result.output.value == "measured"
+
+
 async def test_generation_paces_consecutive_provider_requests(monkeypatch) -> None:
     import httpx
     import respx

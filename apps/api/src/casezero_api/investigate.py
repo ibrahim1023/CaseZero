@@ -73,6 +73,7 @@ async def investigate_from_environment(
                     settings.text_model, settings.groq_base_url,
                     settings.groq_api_key.get_secret_value(), provider="groq", single_request=True,
                     max_tokens=1000, minimum_request_interval_seconds=65,
+                    strict_native_output=True,
                 )
                 worker = Worker(repository, investigation, model, worker_id=str(uuid4()))
                 while await worker.run_once():

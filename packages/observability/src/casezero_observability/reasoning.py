@@ -18,7 +18,7 @@ from casezero_evidence import (
 )
 from casezero_evidence.access import AccessAuditRecorder
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelAPIError, ModelSettings, UnexpectedModelBehavior
+from pydantic_ai import Agent, ModelAPIError, ModelSettings, NativeOutput, UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits
@@ -214,6 +214,7 @@ class PydanticReasoningModel:
     def __init__(
         self, name: str, model: OpenAIChatModel, provider: str = "openai-compatible", *,
         single_request: bool = False, minimum_request_interval_seconds: float = 0,
+        strict_native_output: bool = False,
     ) -> None:
         self.name = name
         self.provider = provider
@@ -221,6 +222,7 @@ class PydanticReasoningModel:
         self._single_request = single_request
         self._minimum_request_interval_seconds = minimum_request_interval_seconds
         self._last_request_at: float | None = None
+        self._strict_native_output = strict_native_output
         if single_request:
             model.client.max_retries = 0
 
@@ -235,6 +237,7 @@ class PydanticReasoningModel:
         single_request: bool = False,
         max_tokens: int | None = None,
         minimum_request_interval_seconds: float = 0,
+        strict_native_output: bool = False,
     ) -> "PydanticReasoningModel":
         settings = ModelSettings(max_tokens=max_tokens) if max_tokens is not None else None
         model = OpenAIChatModel(
@@ -245,6 +248,7 @@ class PydanticReasoningModel:
         return cls(
             name, model, provider, single_request=single_request,
             minimum_request_interval_seconds=minimum_request_interval_seconds,
+            strict_native_output=strict_native_output,
         )
 
     async def generate[OutputT: BaseModel](
@@ -256,8 +260,12 @@ class PydanticReasoningModel:
             if delay > 0:
                 await asyncio.sleep(delay)
         self._last_request_at = time.monotonic()
+        output_type = (
+            NativeOutput(request.output_type, strict=True)
+            if self._strict_native_output else request.output_type
+        )
         agent = Agent(
-            self._model, name=request.stage, output_type=request.output_type,
+            self._model, name=request.stage, output_type=output_type,
             retries=0 if self._single_request else 2,
         )
         try:

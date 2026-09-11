@@ -683,6 +683,7 @@ def _model_router(
         settings.groq_api_key.get_secret_value(),
         provider="groq",
         max_tokens=1000,
+        strict_native_output=True,
     )
     network_host = urlparse(settings.groq_base_url).hostname
     if network_host is None:
