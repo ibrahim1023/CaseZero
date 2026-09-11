@@ -174,10 +174,10 @@ async def persist_stage_result(
             Stage.PROMOTE_TIMELINE: "timeline", Stage.RESOLVE_ENTITIES: "entity", Stage.PROMOTE_CLAIMS: "claim",
         }.get(job.stage)
         if candidate_kind is not None:
-            offset = 0 if job.work_key == "case" else int(job.work_key) * 5
+            offset = 0 if job.work_key == "case" else int(job.work_key) * 3
             candidates = await (await connection.execute(
                 "select candidate_id from public.investigation_candidates "
-                "where investigation_id=%s and kind=%s order by candidate_id offset %s limit 5",
+                "where investigation_id=%s and kind=%s order by candidate_id offset %s limit 3",
                 (job.investigation_id, candidate_kind, offset),
             )).fetchall()
             referenced = tuple(

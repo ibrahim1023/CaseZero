@@ -77,12 +77,12 @@ class InvestigationRepository:
             InvestigationStage.RESOLVE_ENTITIES: "entity",
             InvestigationStage.PROMOTE_CLAIMS: "claim",
         }[job.stage]
-        offset = 0 if job.work_key == "case" else int(job.work_key) * 5
+        offset = 0 if job.work_key == "case" else int(job.work_key) * 3
         if offset < 0:
             raise ValueError("invalid candidate batch")
         rows = await (await self.connection.execute(
             "with batch as (select * from public.investigation_candidates "
-            "where investigation_id=%s and kind=%s order by candidate_id offset %s limit 5) "
+            "where investigation_id=%s and kind=%s order by candidate_id offset %s limit 3) "
             "select p.candidate_id, coalesce(c.candidate,e.candidate,t.candidate) from batch p "
             "left join public.claim_candidates c on p.kind='claim' and c.id=p.candidate_id "
             "and c.case_id=p.case_id and c.model_run_id=p.model_run_id "
