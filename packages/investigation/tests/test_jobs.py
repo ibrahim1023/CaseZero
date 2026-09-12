@@ -16,7 +16,7 @@ from casezero_investigation import (
     job_input_payload,
 )
 from casezero_investigation.repository import CandidateBatch
-from casezero_investigation.worker import _promotion_prompt_data
+from casezero_investigation.worker import _hypothesis_context, _promotion_prompt_data
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 5, tzinfo=UTC)
@@ -31,6 +31,29 @@ def config() -> InvestigationConfig:
         retrieval_version="fts-v1",
         confidence_rule="weighted-delta-v1",
     )
+
+
+def test_hypothesis_context_keeps_reasoning_fields_without_duplicate_lineage() -> None:
+    prompt_state = {
+        "claims": {"claim": {
+            "text": "Cable fractured", "status": "OBSERVED", "confidence": "0.8000",
+            "supporting_evidence_ids": ["evidence"], "contradicting_evidence_ids": [],
+        }},
+        "timeline": {"event": {"description": "Cable separated", "occurred_at": None,
+                                   "time_precision": "UNKNOWN", "confidence": "0.8000",
+                                   "evidence_ids": ["evidence"]}},
+        "entities": {"entity": {"canonical_name": "Cable"}},
+        "questions": {"question": {"text": "When did it separate?"}},
+    }
+
+    assert _hypothesis_context(prompt_state) == {
+        "claims": {"claim": {
+            "text": "Cable fractured", "status": "OBSERVED", "confidence": "0.8000",
+        }},
+        "timeline": {"event": {"description": "Cable separated", "occurred_at": None,
+                                   "time_precision": "UNKNOWN", "confidence": "0.8000"}},
+        "questions": {"question": {"text": "When did it separate?"}},
+    }
 
 
 def test_promotion_prompt_contains_only_candidates_and_active_evidence_ids() -> None:

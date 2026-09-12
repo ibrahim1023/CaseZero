@@ -106,6 +106,32 @@ PROMPTS = {
 MAX_INPUT_BYTES = 180_000
 
 
+def _select_prompt_fields(
+    records: object, fields: tuple[str, ...],
+) -> dict[str, dict[str, object]]:
+    if not isinstance(records, dict):
+        raise TypeError("prompt records must be an object")
+    selected: dict[str, dict[str, object]] = {}
+    for identifier, record in records.items():
+        if not isinstance(identifier, str) or not isinstance(record, dict):
+            raise TypeError("prompt record must be a keyed object")
+        selected[identifier] = {field: record[field] for field in fields if field in record}
+    return selected
+
+
+def _hypothesis_context(prompt_state: dict[str, object]) -> dict[str, object]:
+    return {
+        "claims": _select_prompt_fields(
+            prompt_state["claims"], ("text", "status", "confidence"),
+        ),
+        "timeline": _select_prompt_fields(
+            prompt_state["timeline"],
+            ("description", "occurred_at", "time_precision", "confidence"),
+        ),
+        "questions": prompt_state["questions"],
+    }
+
+
 def _promotion_prompt_data(
     batch: CandidateBatch, active_evidence_ids: tuple[UUID, ...],
 ) -> dict[str, object]:
@@ -249,7 +275,7 @@ class Worker:
         elif job.stage is Stage.GENERATE_HYPOTHESES:
             if not claims:
                 raise StageExhausted(FailureCode.REFERENCE_INVALID)
-            data = {"state": _prompt_state(state)}
+            data = {"state": _hypothesis_context(_prompt_state(state))}
         elif job.stage in {Stage.SEARCH_SUPPORT, Stage.SEARCH_CONTRADICTIONS, Stage.DESIGN_FALSIFICATION_TESTS}:
             hypothesis = state.hypotheses[UUID(job.work_key)]
             data = {"hypothesis": hypothesis.model_dump(mode="json"), "state": _prompt_state(state)}
