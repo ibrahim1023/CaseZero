@@ -10,7 +10,14 @@ from casezero_evidence import (
     ProcessingDisposition,
     TimePrecision,
 )
-from casezero_ingestion.candidates import CandidateProposer, CandidateSet, ClaimDraft, TimelineDraft
+from casezero_ingestion.candidates import (
+    CANDIDATE_PROMPT_TEMPLATE,
+    CandidateProposer,
+    CandidateSet,
+    ClaimDraft,
+    EntityDraft,
+    TimelineDraft,
+)
 from casezero_observability import ReasoningResult
 
 CASE_ID=UUID("018f9c7e-3b2a-7c1d-9e4f-1a2b3c4d5e6f")
@@ -25,6 +32,60 @@ class Router:
 
 def evidence():
     return EvidenceItem(case_id=CASE_ID,source_document_id=DOC_ID,type=EvidenceType.TEXT,observation="Cable was fractured.",source_locator=PdfLocator(page=1),extraction_method=ExtractionMethod.AI,confidence=0.8)
+
+
+def test_candidate_prompt_requires_investigation_material_output() -> None:
+    assert "casezero.candidates.v2" in CANDIDATE_PROMPT_TEMPLATE
+    assert "investigation-material" in CANDIDATE_PROMPT_TEMPLATE
+    assert "row/column" in CANDIDATE_PROMPT_TEMPLATE
+    assert "isolated scalar" in CANDIDATE_PROMPT_TEMPLATE
+
+
+@pytest.mark.asyncio
+async def test_candidate_proposer_discards_locator_restatements_and_isolated_scalars() -> None:
+    item = evidence()
+
+    class MaterialityRouter:
+        async def generate(self, request, disposition):
+            return ReasoningResult(
+                output=CandidateSet(
+                    claims=(
+                        ClaimDraft(
+                            text="Observation in Row 437, Column 5: 0.63",
+                            status="OBSERVED",
+                            supporting_evidence_ids=(item.id,),
+                            contradicting_evidence_ids=(),
+                            confidence=0.8,
+                        ),
+                        ClaimDraft(
+                            text="The flight-control cable was fractured.",
+                            status="OBSERVED",
+                            supporting_evidence_ids=(item.id,),
+                            contradicting_evidence_ids=(),
+                            confidence=0.8,
+                        ),
+                    ),
+                    entities=(EntityDraft(
+                        type="MEASUREMENT", proposed_canonical_name="0.63",
+                        evidence_ids=(item.id,), confidence=0.8,
+                    ),),
+                    timeline=(TimelineDraft(
+                        occurred_at=None, time_precision=TimePrecision.UNKNOWN,
+                        description="Numerical observation '231' documented",
+                        evidence_ids=(item.id,), confidence=0.8,
+                    ),),
+                ),
+                model_name="fake",
+                fallback_used=False,
+            )
+
+    result = await CandidateProposer(MaterialityRouter()).propose(
+        CASE_ID, (item,), ProcessingDisposition.AI_ALLOWED,
+        datetime(2026, 8, 25, tzinfo=UTC),
+    )
+
+    assert len(result) == 1
+    assert result[0].text == "The flight-control cable was fractured."
 
 
 @pytest.mark.asyncio

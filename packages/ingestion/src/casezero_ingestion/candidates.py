@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
@@ -16,8 +17,24 @@ from casezero_observability import ReasoningRequest, ReasoningResult
 from pydantic import BaseModel, Field, field_validator
 
 CANDIDATE_PROMPT_TEMPLATE = (
-    "casezero.candidates.v1: Propose only candidates supported by the supplied evidence ids."
+    "casezero.candidates.v2: Propose only investigation-material candidates supported by supplied "
+    "evidence IDs. A candidate must describe a meaningful event, condition, entity, assertion, or "
+    "contradiction that could distinguish causal explanations. Do not turn unlabeled table values, "
+    "isolated scalar measurements, row/column coordinates, locator text, or generic observations into "
+    "claims, entities, or timeline events. Preserve OBSERVED, INFERRED, DISPUTED, and UNKNOWN."
 )
+_SCALAR = re.compile(r"[-+]?\d+(?:\.\d+)?(?:\s*[A-Za-z%]+)?")
+_LOCATOR_RESTATEMENT = re.compile(r"\brow\s+\d+\b.*\bcolumn\s+\d+\b", re.IGNORECASE)
+_GENERIC_OBSERVATION = re.compile(
+    r"^(?:numerical\s+)?observation\b.*(?:recorded|documented|row|column|cell)", re.IGNORECASE,
+)
+
+
+def _is_material_candidate_text(value: str) -> bool:
+    text = " ".join(value.split())
+    return bool(text) and _SCALAR.fullmatch(text) is None and not (
+        _LOCATOR_RESTATEMENT.search(text) or _GENERIC_OBSERVATION.search(text)
+    )
 
 
 class ClaimDraft(BaseModel):
@@ -92,13 +109,16 @@ class CandidateProposer:
             ids = set(claim_draft.supporting_evidence_ids + claim_draft.contradicting_evidence_ids)
             if not ids <= allowed:
                 raise ValueError("model invented evidence id")
-            output.append(ClaimCandidate(case_id=case_id, text=claim_draft.text, status=claim_draft.status, supporting_evidence_ids=claim_draft.supporting_evidence_ids, contradicting_evidence_ids=claim_draft.contradicting_evidence_ids, confidence=claim_draft.confidence, model_run_id=result.run_id, created_at=created_at))
+            if _is_material_candidate_text(claim_draft.text):
+                output.append(ClaimCandidate(case_id=case_id, text=claim_draft.text, status=claim_draft.status, supporting_evidence_ids=claim_draft.supporting_evidence_ids, contradicting_evidence_ids=claim_draft.contradicting_evidence_ids, confidence=claim_draft.confidence, model_run_id=result.run_id, created_at=created_at))
         for entity_draft in result.output.entities:
             if not set(entity_draft.evidence_ids) <= allowed:
                 raise ValueError("model invented evidence id")
-            output.append(EntityCandidate(case_id=case_id, type=entity_draft.type, proposed_canonical_name=entity_draft.proposed_canonical_name, aliases=entity_draft.aliases, evidence_ids=entity_draft.evidence_ids, confidence=entity_draft.confidence, model_run_id=result.run_id, created_at=created_at))
+            if _is_material_candidate_text(entity_draft.proposed_canonical_name):
+                output.append(EntityCandidate(case_id=case_id, type=entity_draft.type, proposed_canonical_name=entity_draft.proposed_canonical_name, aliases=entity_draft.aliases, evidence_ids=entity_draft.evidence_ids, confidence=entity_draft.confidence, model_run_id=result.run_id, created_at=created_at))
         for timeline_draft in result.output.timeline:
             if not set(timeline_draft.evidence_ids) <= allowed:
                 raise ValueError("model invented evidence id")
-            output.append(TimelineCandidate(case_id=case_id, occurred_at=timeline_draft.occurred_at.astimezone(UTC) if timeline_draft.occurred_at is not None else None, time_precision=timeline_draft.time_precision, description=timeline_draft.description, evidence_ids=timeline_draft.evidence_ids, confidence=timeline_draft.confidence, model_run_id=result.run_id, created_at=created_at))
+            if _is_material_candidate_text(timeline_draft.description):
+                output.append(TimelineCandidate(case_id=case_id, occurred_at=timeline_draft.occurred_at.astimezone(UTC) if timeline_draft.occurred_at is not None else None, time_precision=timeline_draft.time_precision, description=timeline_draft.description, evidence_ids=timeline_draft.evidence_ids, confidence=timeline_draft.confidence, model_run_id=result.run_id, created_at=created_at))
         return tuple(output)
