@@ -69,11 +69,18 @@ async def test_candidate_proposer_discards_locator_restatements_and_isolated_sca
                         type="MEASUREMENT", proposed_canonical_name="0.63",
                         evidence_ids=(item.id,), confidence=0.8,
                     ),),
-                    timeline=(TimelineDraft(
-                        occurred_at=None, time_precision=TimePrecision.UNKNOWN,
-                        description="Numerical observation '231' documented",
-                        evidence_ids=(item.id,), confidence=0.8,
-                    ),),
+                    timeline=(
+                        TimelineDraft(
+                            occurred_at=None, time_precision=TimePrecision.UNKNOWN,
+                            description="Numerical observation '231' documented",
+                            evidence_ids=(item.id,), confidence=0.8,
+                        ),
+                        TimelineDraft(
+                            occurred_at=None, time_precision=TimePrecision.UNKNOWN,
+                            description="Data recorded for Row 188",
+                            evidence_ids=(item.id,), confidence=0.8,
+                        ),
+                    ),
                 ),
                 model_name="fake",
                 fallback_used=False,

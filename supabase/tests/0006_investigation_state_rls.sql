@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(12);
 
 select extensions.has_table(
   'public', 'investigations',
@@ -49,6 +49,10 @@ select extensions.ok(
 select extensions.ok(
   not public.phase3_candidate_is_material('entity', '{"proposed_canonical_name":"0.63"}'::jsonb),
   'isolated-scalar entity candidate is ineligible'
+);
+select extensions.ok(
+  not public.phase3_candidate_is_material('timeline', '{"description":"Data recorded for Row 188"}'::jsonb),
+  'single-row locator restatement is ineligible'
 );
 
 select * from extensions.finish();

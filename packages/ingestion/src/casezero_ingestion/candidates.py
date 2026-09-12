@@ -28,12 +28,17 @@ _LOCATOR_RESTATEMENT = re.compile(r"\brow\s+\d+\b.*\bcolumn\s+\d+\b", re.IGNOREC
 _GENERIC_OBSERVATION = re.compile(
     r"^(?:numerical\s+)?observation\b.*(?:recorded|documented|row|column|cell)", re.IGNORECASE,
 )
+_SINGLE_ROW_RESTATEMENT = re.compile(
+    r"^(?:data|value|observation)\b.*\brow\s+\d+\b", re.IGNORECASE,
+)
 
 
 def _is_material_candidate_text(value: str) -> bool:
     text = " ".join(value.split())
     return bool(text) and _SCALAR.fullmatch(text) is None and not (
-        _LOCATOR_RESTATEMENT.search(text) or _GENERIC_OBSERVATION.search(text)
+        _LOCATOR_RESTATEMENT.search(text)
+        or _GENERIC_OBSERVATION.search(text)
+        or _SINGLE_ROW_RESTATEMENT.search(text)
     )
 
 
