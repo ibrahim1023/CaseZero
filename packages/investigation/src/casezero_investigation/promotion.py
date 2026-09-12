@@ -37,7 +37,8 @@ PROMOTION_CLAIMS_PROMPT = (
 )
 PROMOTION_ENTITIES_PROMPT = (
     "casezero.promotion.entities.v1: " + _PROMOTION_RULES
-    + "Preserve fixed entity types and source spelling. Merge only identities connected by shared "
+    + "Preserve fixed entity types and source spelling. Never merge candidates with different type strings, "
+    "even when names or aliases match. Merge same-type identities only when connected by shared "
     "casefolded, whitespace-normalized names or aliases. Select a supplied canonical name or alias "
     "and retain all remaining names as aliases; do not invent names."
 )

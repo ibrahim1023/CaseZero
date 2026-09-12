@@ -611,6 +611,10 @@ def test_promotion_revalidates_mutated_drafts_and_input_timestamps() -> None:
         )
 
 
+def test_entity_prompt_never_merges_different_fixed_types() -> None:
+    assert "Never merge candidates with different type strings" in PROMOTION_ENTITIES_PROMPT
+
+
 @pytest.mark.parametrize(
     ("prompt", "prefix"),
     [
